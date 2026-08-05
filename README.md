@@ -9,8 +9,14 @@ I will update the README as I progress through the project. Treat this almost as
 # Contents
 
 - **[Setting up WebAsm](#setting-up-webasm)**
+  - **[First Program](#first-program)**
+  - **[Insert Data into Program](#insert-data-into-program)**
+- **[Assembler](#assembler)**
+  - **[First Step, Replacing Characters](#first-step-replacing-characters)**
 
 ## Setting Up WebAsm
+
+### First Program
 
 First thing I did was set up a javascript file that would load a `wasm` file and run it. I use [program.wasm](program.wasm) as the target. I also had to create a function to create the file and fill it with the binary data. With the help of ChatGPT to guide me, I was able to make a simple program that would run and I used node js for fast console output. 
 
@@ -75,3 +81,13 @@ function main() -> void {
     print_i32(add(6, 7))
 }
 ```
+
+### Insert Data into Program
+
+Okay we're going to try to effect the output with some input from the javascript file. I will create a file named, input.cwa (custom web assembly), then I will read this file in javascript and convert it into binary and feed it into the webasm program. I will do this by exporting a memory page inside the program.wasm file. 
+
+## Assembler
+
+### First Step, Replacing Characters
+
+So for the assembler, we're going to start with replacing characters from the input and then converting that into the opcode. Say `add` is `a` and such, if the character is not in the list it will just ignore it. This way we can start making the assembler and then later have this a little bit more usable assembler and integrate on top of it.
