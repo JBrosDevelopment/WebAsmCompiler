@@ -86,6 +86,64 @@ function main() -> void {
 
 Okay we're going to try to effect the output with some input from the javascript file. I will create a file named, input.cwa (custom web assembly), then I will read this file in javascript and convert it into binary and feed it into the webasm program. I will do this by exporting a memory page inside the program.wasm file. 
 
+To do this, I added a memory output to the wasm program.wasm file.
+
+```js
+// MEMORY
+0x05, 0x03, // 05 = Memory Section, 03= length of section in `3` bytes
+0x01, // 01 = 1 page of memory (65,536 bytes)
+0x00, 0x01, // 00 = limit flags (0 = no max), 01 = minumum size (1)
+
+// ... later in the program.wasm file:
+
+// export "memory"
+0x06, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79, // 06 = length of export name, "memory"; rest = "memory"
+0x02, 0x00, // 02 = export kind (memory), 00 = memory index (0)
+```
+
+I also wanted to pass `byteLength` as a parameter into the main function. I needed to update the Type section in the program.wasm file.
+
+```js
+// main(i32) -> void
+0x60, 0x01, 0x7F, 0x00, // 60=function type, 00=1 parameters, 7F=i32, 00=0 return values
+```
+
+And then after I added it as an export to the javascript part so that I could access it.
+
+```js
+const memory = instance.exports.memory;
+const bytes = new Uint8Array(memory.buffer);
+const byteLength = 3;
+// test bytes
+bytes[0] = 10;
+bytes[1] = 20;
+bytes[2] = 30;
+
+// Start the program and pass the byteLength parameter into the function
+instance.exports.main(byteLength);
+```
+
+To access the memory, I used `i32.load8_u` (`0x2D`) to load a single byte from memory. Then I made a loop using `loop` (`0x03`). After a bit of time figuring out how that all works and counting the amount of bytes in the program again and again, I ended with the opcode version using 39 bytes for the new main function with a working loop:
+
+```js
+// This is the pseudo code version of the opcode for the updated main function taking a total of 39 bytes
+function main(byteLength: i32) -> void {
+    var index: i32 = 0
+    var sum: i32 = 0
+    block loop:
+        sum = (memory[index] as i32) + sum
+        print_i32(memory[index])
+        index = index + 1
+        if index < byteLength {
+            goto loop
+        }
+    end
+    print_i32(sum)
+}
+```
+
+The above code is coded really weird with the `block` and the `goto` statement, but that is closest way of writing this code in a more readable format. The way Web Assembly works, there is no exact loop that then loops back to the beginning. it does use an opcode named loop, but it is more of a block than a loop. It also has a branch `br` (`0x0C`) and a conditional branch `br_if` (`0x0D`), and these will return to a depth defined, or can also break if you return to a  surrounding block. But also if the code reaches the `end` of the loop it breaks instead of looping back. It's interesting the way it works but once you understand it it makes sense.
+
 ## Assembler
 
 ### First Step, Replacing Characters

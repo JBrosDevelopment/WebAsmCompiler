@@ -44,7 +44,7 @@ function createWasmFile() {
         // print_i32(i32) -> void
         0x60, 0x01, 0x7F, 0x00, // 60=function type, 01=1 parameter, 7F=i32, 00=0 return values
         
-        // main() -> void
+        // main(i32) -> void
         0x60, 0x01, 0x7F, 0x00, // 60=function type, 00=1 parameters, 7F=i32, 00=0 return values
 
         // IMPORT
@@ -61,7 +61,7 @@ function createWasmFile() {
         // FUNCTION
         0x03, 0x02, // 03 = Function Section, 02= length of section in `2` bytes
 
-        // main() -> void
+        // main(i32) -> void
         0x01, // 01 = 1 function
         0x01, // 01 = type index (1)
 
@@ -83,11 +83,11 @@ function createWasmFile() {
         0x02, 0x00, // 02 = export kind (memory), 00 = memory index (0)
 
         // CODE SECTION
-        0x0A, 0x2D, // 0A = Code Section, 2D= length of section in `45` bytes
+        0x0A, 0x39, // 0A = Code Section, =length of section 
         
         // main()
         0x01, // = function body of function (main)
-        0x2B, // = size of function body in bytes `43` bytes
+        0x37, // = size of function body in bytes 
         0x02, // = local variable count
 
         0x01, 0x7F, // = 1 local variable of type i32 (index)
@@ -97,25 +97,32 @@ function createWasmFile() {
         0x21, 0x01, // set_local 1 (index)
 
         0x41, 0x00, // i32.const 0
-        0x21, 0x01, // set_local 2 (sum)
+        0x21, 0x02, // set_local 2 (sum)
 
         // loop through the memory and sum the values
         0x02, 0x40, // block, [empty block type]
         0x03, 0x40, // loop, [empty block type]
         
-        0x20, 0x01, // get_local 1 (sum)
+        0x20, 0x01, // get_local 1 (index)
+        0x2C, 0x00, 0x00, // i32.load8_s, align=2, offset=0
+        0x20, 0x02, // get_local 2 (sum)
+        0x6A, // i32.add
+        0x21, 0x02, // set_local 2 (sum)
+
+        0x20, 0x01, // get_local 1 (index)
+        0x2C, 0x00, 0x00, // i32.load8_s, align=2, offset=0
         0x10, 0x00, // call 0 (print_i32)
         
         0x20, 0x01, // get_local 1 (index)
         0x41, 0x01, // i32.const 1
-        0x0C, 0x00, // i32.add
+        0x6A, // i32.add
         0x21, 0x01, // set_local 1 (index)
 
         0x20, 0x01, // get_local 1 (index)
         0x20, 0x00, // get_local 0 (length)
-        0x48, // i32.lt_s
+        0x48, // i32.lt_s 
 
-        0x0D, 0x00, // br_if 0 
+        0x0D, 0x00, // br_if 0
 
         0x0B, // end
         0x0B, // end
