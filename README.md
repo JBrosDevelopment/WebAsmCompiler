@@ -74,8 +74,8 @@ And it sure enough outputed:
 
 The psuedocode for the program is as follows:
 
-```
-import from "env" print_i32(i32) -> void
+```js
+import from "env" function print_i32(i32) -> void
 
 function main() -> void {
     print_i32(add(6, 7))
@@ -149,3 +149,57 @@ The above code is coded really weird with the `block` and the `goto` statement, 
 ### First Step, Replacing Characters
 
 So for the assembler, we're going to start with replacing characters from the input and then converting that into the opcode. Say `add` is `a` and such, if the character is not in the list it will just ignore it. This way we can start making the assembler and then later have this a little bit more usable assembler and integrate on top of it.
+
+Here is the psuedo code version of the opcode binary in the program.wasm
+
+```js
+import from "env" function print_i32(i32) -> void
+import from "env" function write_char(i32) -> void
+
+function main() -> void {
+    var bytes: i32 = 0
+    var char: i32 = 0
+    var lastWasEOF: i32 = 0
+
+    block loop:
+        char = memory[bytes]
+        bytes = bytes + 1
+
+        // commonly used opcodes
+        if char == 97 { // unicode for `a`
+            char = 0x6A // opcode for `add`
+        }
+        if char == 105 { // unicode for `i`
+            char = 0x41 // opcode for `i32.const`
+        }
+        if char == 99 { // unicode for `c`
+            char = 0x10 // opcode for `call`
+        }
+        if char == 103 { // unicode for `g`
+            char = 0x20 // opcode for `i32.get`
+        }
+        if char == 115 { // unicode for `s`
+            char = 0x21 // opcode for `i32.set`
+        }
+        if char == 108 { // unicode for `l`
+            char = 0x2D // opcode for `i32.load8_u`
+        }
+
+        if lastWasEOF == 1 && char == ENDOFFILEBYTE {
+            break // technically branches out of depth
+        }
+        
+        lastWasEOF = if char == ENDOFFILEBYTE {
+            1
+        } else {
+            0
+        }
+
+        write_char(char)
+
+        goto loop
+    end
+    
+    print_i32(bytes)
+}
+```
