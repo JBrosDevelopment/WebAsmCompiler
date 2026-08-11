@@ -13,6 +13,7 @@ I will update the README as I progress through the project. Treat this almost as
   - **[Insert Data into Program](#insert-data-into-program)**
 - **[Assembler](#assembler)**
   - **[First Step, Replacing Characters](#first-step-replacing-characters)**
+  - **[Second Step, Input is Text and Output is bytes](#second-step-input-is-text-and-output-is-bytes)
 
 ## Setting Up WebAsm
 
@@ -202,4 +203,220 @@ function main() -> void {
     
     print_i32(bytes)
 }
+```
+
+### Second Step, Input is Text and Output is bytes
+
+Okay so the next step is to make the Input a text file and the output bytes. Right now, it has no idea when a byte is an instruction and when a byte is a number or such. Unfortunately we can not use the program from the first step to work on this, because any number input will just be the byte value and not the ASCI code for the number.
+
+```js
+import from "env" function print_i32(i32) -> void
+import from "env" function write_char(i32) -> void
+
+function main() -> void {
+    var bytes: i32 = 0
+    var char: i32 = 0
+    var cmd: i32 = 0
+    var number: i32 = 0
+    var startWord: i32 = 0
+    var wordLength: i32 = 0
+    var stateCMD: i32 = 0 // 0=not command byte, 1=next byte is command, 2=byte is command
+    var lastWasEOF: i32 = 0
+
+    block loop:
+        char = memory[bytes]
+
+        if char == '\n' as i32 {
+            stateCMD = 1 // next byte is command
+            startWord = bytes + 1
+        }
+
+        if char == ' ' as i32 || char == '\t' as i32 {
+            if stateCMD == 2 { // End Of Command
+                stateCMD = 0
+                cmd = WordToCMD(startWord, wordLength)
+
+                if cmd == 0xFB { // check for error
+                    print_i32(0xFB)
+                    return
+                }
+                
+                write_char(cmd)
+            }
+            if stateCMD == 0 { // End Of Argument
+                number = WordToI32(startWord, wordLength)
+
+                if number == 0xFC { // check for error
+                    print_i32(0xFC)
+                    return
+                }
+
+                writeULEB128(number)
+            }
+            startWord = bytes + 1 // next byte is start of word
+            wordLength = 0
+            continue
+        }
+
+        // if valid char
+        if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
+            if stateCMD {
+                stateCMD = 2
+            }
+            wordLength = wordLength + 1
+        } else {
+            print_i32(0xFD) // error code invalid char
+            return
+        }
+
+        if lastWasEOF == 1 && char == ENDOFFILEBYTE {
+            break
+        }
+        lastWasEOF = if char == ENDOFFILEBYTE { 1 } else { 0 }
+
+        bytes = bytes + 1
+        goto loop
+    end
+
+    // END OF FILE SEQUENCE
+    write_char(0xFE)
+    write_char(0xFE)
+    
+    print_i32(bytes)
+}
+
+function WordToCMD(startWord: i32, wordLength: i32) -> i32 {
+    if wordLength == 3 && memory[startWord] == 'a' && memory[startWord + 1] == 'd' && memory[startWord + 2] == 'd' {
+        return 0x6A // opcode for `add`
+    }
+    if wordLength == 3 && memory[startWord] == 'm' && memory[startWord + 1] == 'u' && memory[startWord + 2] == 'l' {
+        return 0x6C // opcode for `mul`
+    }
+    if wordLength == 3 && memory[startWord] == 'a' && memory[startWord + 1] == 'n' && memory[startWord + 2] == 'd' {
+        return 0x71 // opcode for `and`
+    }
+    if wordLength == 2 && memory[startWord] == 'o' && memory[startWord + 1] == 'r'  {
+        return 0x72 // opcode for `or`
+    }
+    if wordLength == 3 && memory[startWord] == 's' && memory[startWord + 1] == 'h' && memory[startWord + 2] == 'r'  {
+        return 0x76 // opcode for `shr_u`
+    }
+    if wordLength == 5 && memory[startWord] == 'c' && memory[startWord + 1] == 'o' && memory[startWord + 2] == 'n' && memory[startWord + 3] == 's' && memory[startWord + 4] == 't' { 
+        return 0x41 // opcode for `i32.const`
+    }
+    if wordLength == 4 && memory[startWord] == 'c' && memory[startWord + 1] == 'a' && memory[startWord + 2] == 'l' && memory[startWord + 3] == 'l' {
+        return 0x10 // opcode for `call`
+    }
+    if wordLength == 3 && memory[startWord] == 'g' && memory[startWord + 1] == 'e' && memory[startWord + 2] == 't' { 
+        return 0x20 // opcode for `i32.get`
+    }
+    if wordLength == 3 && memory[startWord] == 's' && memory[startWord + 1] == 'e' && memory[startWord + 2] == 't' { 
+        return 0x21 // opcode for `i32.set`
+    }
+    if wordLength == 4 && memory[startWord] == 'l' && memory[startWord + 1] == 'o' && memory[startWord + 2] == 'a' && memory[startWord + 3] == 'd' { 
+        return 0x2D // opcode for `i32.load8_u`
+    }
+    if wordLength == 2 && memory[startWord] == 'i' && memory[startWord + 1] == 'f' { 
+        return 0x04 // opcode for `if`
+    }
+    if wordLength == 4 && memory[startWord] == 'e' && memory[startWord + 1] == 'l' && memory[startWord + 2] == 's' && memory[startWord + 3] == 'e' { 
+        return 0x05 // opcode for `else`
+    }
+    if wordLength == 5 && memory[startWord] == 'b' && memory[startWord + 1] == 'l' && memory[startWord + 2] == 'o' && memory[startWord + 3] == 'c' && memory[startWord + 4] == 'k' { 
+        return 0x02 // opcode for `block`
+    }
+    if wordLength == 3 && memory[startWord] == 'e' && memory[startWord + 1] == 'n' && memory[startWord + 2] == 'd' { 
+        return 0x0B // opcode for `end`
+    }
+    if wordLength == 2 && memory[startWord] == 'e' && memory[startWord + 1] == 'q' { 
+        return 0x46 // opcode for `eq`
+    }
+    if wordLength == 2 && memory[startWord] == 'n' && memory[startWord + 1] == 'q' { 
+        return 0x47 // opcode for `nq`
+    }
+    if wordLength == 2 && memory[startWord] == 'l' && memory[startWord + 1] == 't' { 
+        return 0x49 // opcode for `lt_u`
+    }
+    if wordLength == 2 && memory[startWord] == 'l' && memory[startWord + 1] == 'e' { 
+        return 0x4D // opcode for `le_u`
+    }
+    if wordLength == 2 && memory[startWord] == 'g' && memory[startWord + 1] == 't' { 
+        return 0x4B // opcode for `gt_u`
+    }
+    if wordLength == 2 && memory[startWord] == 'g' && memory[startWord + 1] == 'e' { 
+        return 0x4F // opcode for `ge_u`
+    }
+    if wordLength == 2 && memory[startWord] == 'b' && memory[startWord + 1] == 'r' { 
+        return 0x0C // opcode for `br`
+    }
+    if wordLength == 5 && memory[startWord] == 'b' && memory[startWord + 1] == 'r' && memory[startWord + 2] == '_' && memory[startWord + 3] == 'i' && memory[startWord + 4] == 'f' { 
+        return 0x0D // opcode for `br_if`
+    }
+    if wordLength == 3 && memory[startWord] == 'r' && memory[startWord + 1] == 'e' && memory[startWord + 2] == 't' { 
+        return 0x0F // opcode for `return`
+    }
+    return 0xFB
+}
+
+function WordToI32(startWord: i32, wordLength) -> i32 {
+    var char: i32 = 0
+    var digit: i32 = 0
+    var product: i32 = 0
+    var index: i32 = 0
+    loop: // no block because no need to break out, instead code reaches 'end' and breaks
+        char = memory[startWord + index]
+
+        if char < '0' as i32 || char > '9' {
+            return 0xFC
+        }
+
+        digit = char - 48
+        product = product * 10 + digit
+
+        index = index + 1
+        if index < wordLength {
+            goto loop
+        } // else, reaches 'end' and breaks
+    end
+
+    return product
+}
+
+function IntoULEB128(number: i32) -> i32 {
+    var byte: i32 = number & 0x7F
+
+    if number >= 128 {
+        byte = byte | 0x80
+    }
+
+    return byte
+}
+
+function WriteULEB128(number: i32) -> i32 {
+    var byte: i32 = 0
+    var bytesWritten: i32 = 0
+
+    loop: // no block because no need to break out, instead code reaches 'end' and breaks
+        byte = IntoULEB128(number)
+        write_char(byte)
+
+        bytesWritten = bytesWritten + 1
+        number = number >> 7
+
+        if number > 0 {
+            goto loop
+        } // else, reaches 'end' and breaks
+    end
+
+    return bytesWritten
+}
+
+/*
+example input code
+const 1
+load 0 0
+const 3
+add
+0 call
+*/
 ```

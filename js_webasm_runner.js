@@ -2,7 +2,7 @@ const fs = require('fs');
 
 async function main() {
     const wasmBytes = fs.readFileSync('./program.wasm');
-    const outputFile = fs.createWriteStream('./output.cwa');
+    const outputFile = fs.createWriteStream('./output.wasm');
 
     // This is for import functions to be exposed in WebAsm
     const imports = {
@@ -24,11 +24,7 @@ async function main() {
     const memory = instance.exports.memory;
     const bytes = new Uint8Array(memory.buffer);
     
-    const replaceBytes = [
-        'i'.charCodeAt(0), 77,
-        'c'.charCodeAt(0), 5,
-        0xFE, 0xFE
-    ];
+    const replaceBytes = fs.readFileSync('./input.cwa');
 
     for (let i = 0; i < replaceBytes.length; i++) {
         bytes[i] = replaceBytes[i];
@@ -190,6 +186,10 @@ function createWasmFile() {
         0x21, 0x01, // local.set 1 (char)
         0x0B, // end [if]
 
+        // write_char(char)
+        0x20, 0x01, // local.get 1 (char)
+        0x10, 1, // call 1
+
         // lastWasEOF == 1
         0x20, 0x02, // local.get 2 (lastWasEOF)
         0x41, 1, // i32.const 1
@@ -212,10 +212,6 @@ function createWasmFile() {
         0x41, 0, // i32.const 0
         0x0B, // end [if]
         0x21, 0x02, // local.set 2 (lastWasEOF)
-
-        // write_char(char)
-        0x20, 0x01, // local.get 1 (char)
-        0x10, 1, // call 1
 
         0x0C, 0x00, // br (loop=0, block=1)
 
