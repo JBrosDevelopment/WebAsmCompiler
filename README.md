@@ -287,19 +287,22 @@ function main() -> void {
 
 function WordToCMD(startWord: i32, wordLength: i32) -> i32 {
     if wordLength == 3 && memory[startWord] == 'a' && memory[startWord + 1] == 'd' && memory[startWord + 2] == 'd' {
-        return 0x6A // opcode for `add`
+        return 0x6A // opcode for `i32.add`
     }
     if wordLength == 3 && memory[startWord] == 'm' && memory[startWord + 1] == 'u' && memory[startWord + 2] == 'l' {
-        return 0x6C // opcode for `mul`
+        return 0x6C // opcode for `i32.mul`
+    }
+    if wordLength == 3 && memory[startWord] == 's' && memory[startWord + 1] == 'u' && memory[startWord + 2] == 'b' {
+        return 0x6B // opcode for `i32.sub`
     }
     if wordLength == 3 && memory[startWord] == 'a' && memory[startWord + 1] == 'n' && memory[startWord + 2] == 'd' {
-        return 0x71 // opcode for `and`
+        return 0x71 // opcode for `i32.and`
     }
     if wordLength == 2 && memory[startWord] == 'o' && memory[startWord + 1] == 'r'  {
-        return 0x72 // opcode for `or`
+        return 0x72 // opcode for `i32.or`
     }
     if wordLength == 3 && memory[startWord] == 's' && memory[startWord + 1] == 'h' && memory[startWord + 2] == 'r'  {
-        return 0x76 // opcode for `shr_u`
+        return 0x76 // opcode for `i32.shr_u`
     }
     if wordLength == 5 && memory[startWord] == 'c' && memory[startWord + 1] == 'o' && memory[startWord + 2] == 'n' && memory[startWord + 3] == 's' && memory[startWord + 4] == 't' { 
         return 0x41 // opcode for `i32.const`
@@ -308,10 +311,10 @@ function WordToCMD(startWord: i32, wordLength: i32) -> i32 {
         return 0x10 // opcode for `call`
     }
     if wordLength == 3 && memory[startWord] == 'g' && memory[startWord + 1] == 'e' && memory[startWord + 2] == 't' { 
-        return 0x20 // opcode for `i32.get`
+        return 0x20 // opcode for `local.get`
     }
     if wordLength == 3 && memory[startWord] == 's' && memory[startWord + 1] == 'e' && memory[startWord + 2] == 't' { 
-        return 0x21 // opcode for `i32.set`
+        return 0x21 // opcode for `local.set`
     }
     if wordLength == 4 && memory[startWord] == 'l' && memory[startWord + 1] == 'o' && memory[startWord + 2] == 'a' && memory[startWord + 3] == 'd' { 
         return 0x2D // opcode for `i32.load8_u`
@@ -325,26 +328,29 @@ function WordToCMD(startWord: i32, wordLength: i32) -> i32 {
     if wordLength == 5 && memory[startWord] == 'b' && memory[startWord + 1] == 'l' && memory[startWord + 2] == 'o' && memory[startWord + 3] == 'c' && memory[startWord + 4] == 'k' { 
         return 0x02 // opcode for `block`
     }
+    if wordLength == 4 && memory[startWord] == 'l' && memory[startWord + 1] == 'o' && memory[startWord + 2] == 'o' && memory[startWord + 3] == 'p' { 
+        return 0x02 // opcode for `block`
+    }
     if wordLength == 3 && memory[startWord] == 'e' && memory[startWord + 1] == 'n' && memory[startWord + 2] == 'd' { 
         return 0x0B // opcode for `end`
     }
     if wordLength == 2 && memory[startWord] == 'e' && memory[startWord + 1] == 'q' { 
-        return 0x46 // opcode for `eq`
+        return 0x46 // opcode for `i32.eq`
     }
     if wordLength == 2 && memory[startWord] == 'n' && memory[startWord + 1] == 'q' { 
-        return 0x47 // opcode for `nq`
+        return 0x47 // opcode for `i32.nq`
     }
     if wordLength == 2 && memory[startWord] == 'l' && memory[startWord + 1] == 't' { 
-        return 0x49 // opcode for `lt_u`
+        return 0x49 // opcode for `i32.lt_u`
     }
     if wordLength == 2 && memory[startWord] == 'l' && memory[startWord + 1] == 'e' { 
-        return 0x4D // opcode for `le_u`
+        return 0x4D // opcode for `i32.le_u`
     }
     if wordLength == 2 && memory[startWord] == 'g' && memory[startWord + 1] == 't' { 
-        return 0x4B // opcode for `gt_u`
+        return 0x4B // opcode for `i32.gt_u`
     }
     if wordLength == 2 && memory[startWord] == 'g' && memory[startWord + 1] == 'e' { 
-        return 0x4F // opcode for `ge_u`
+        return 0x4F // opcode for `i32.ge_u`
     }
     if wordLength == 2 && memory[startWord] == 'b' && memory[startWord + 1] == 'r' { 
         return 0x0C // opcode for `br`
@@ -392,7 +398,7 @@ function IntoULEB128(number: i32) -> i32 {
     return byte
 }
 
-function WriteULEB128(number: i32) -> i32 {
+function WriteULEB128(number: i32) -> void {
     var byte: i32 = 0
     var bytesWritten: i32 = 0
 
@@ -407,8 +413,6 @@ function WriteULEB128(number: i32) -> i32 {
             goto loop
         } // else, reaches 'end' and breaks
     end
-
-    return bytesWritten
 }
 
 /*
@@ -417,6 +421,6 @@ const 1
 load 0 0
 const 3
 add
-0 call
+call 0 
 */
 ```

@@ -36,16 +36,59 @@ async function main() {
     outputFile.end();
 }
 
-function createWasmFile() {
-    const wasmBytes = new Int8Array([
+function cmd(input) {
+    if (input == 'i32.add') { return 0x6A }
+    else if (input == 'i32.sub') { return 0x6B }
+    else if (input == 'i32.mul') { return 0x6C }
+    else if (input == 'i32.and') { return 0x71 }
+    else if (input == 'i32.or') { return 0x72 }
+    else if (input == 'i32.shr_u') { return 0x76 }
+    else if (input == 'i32.const') { return 0x41 }
+    else if (input == 'call') { return 0x10 }
+    else if (input == 'local.get') { return 0x20 }
+    else if (input == 'local.set') { return 0x21 }
+    else if (input == 'i32.load8_u') { return 0x2D }
+    else if (input == 'if') { return 0x04 }
+    else if (input == 'else') { return 0x05 }
+    else if (input == 'block') { return 0x02 }
+    else if (input == 'loop') { return 0x03 }
+    else if (input == 'end') { return 0x0B }
+    else if (input == 'i32.eq') { return 0x46 }
+    else if (input == 'i32.nq') { return 0x47 }
+    else if (input == 'i32.lt_u') { return 0x49 }
+    else if (input == 'i32.le_u') { return 0x4D }
+    else if (input == 'i32.gt_u') { return 0x4B }
+    else if (input == 'i32.ge_u') { return 0x4F }
+    else if (input == 'br') { return 0x0C }
+    else if (input == 'br_if') { return 0x0D }
+    else if (input == 'return') { return 0x0F }
+    console.error("Command, " + input + ", not found.");
+    process.exit(1);
+}
 
+function ULEB128(number) {
+    const bytes = [];
+    while (number > 0) {
+        const byte = number & 0x7F;
+        number >>>= 7;
+        if (number > 0) {
+            bytes.push(byte | 0x80);
+        } else {
+            bytes.push(byte);
+        }
+    }
+    return bytes;
+}
+
+function createWasmFile() {
+    const b1 = [
         // HEADER
         0x00, 0x61, 0x73, 0x6D, // magic number
         0x01, 0x00, 0x00, 0x00, // version
 
         // TYPE
-        0x01, 12, // 01 = Type Section, = length of section in bytes
-        0x03, // There are 3 function types
+        0x01, 27, // 01 = Type Section, = length of section in bytes
+        0x06, // function type count
 
         // print_i32(i32) -> void
         0x60, 0x01, 0x7F, 0x00, // 60=function type, 01=1 parameter, 7F=i32, 00=0 return values
@@ -55,6 +98,15 @@ function createWasmFile() {
         
         // main() -> void
         0x60, 0x00, 0x00, // 60=function type, 00=0 parameters, 00=0 return values
+        
+        // WordToCMD(), WordToI32() -> i32
+        0x60, 0x02, 0x7F, 0x7F, 0x01, 0x7F, // 60=function type, 0x02=2 parameters, 7F=param1 i32, 7F=param2 i32, 1=returns value, 7F=returns i32
+        
+        // IntoULEB128() -> i32
+        0x60, 0x01, 0x7F, 0x01, 0x7F, // 60=function type, 01=1 parameter, 7F=i32, 1=returns value, 7F=returns i32
+        
+        // WriteULEB128() -> void
+        0x60, 0x01, 0x7F, 0x00, // 60=function type, 01=1 parameter, 7F=i32, 00=0 return values
 
         // IMPORT
         0x02, 34, // 02 = Import Section, = length of section in bytes
@@ -73,11 +125,14 @@ function createWasmFile() {
         0x00, 0x01, // 00 = import kind (function), 01 = type index (1)
 
         // FUNCTION
-        0x03, 2, // 03 = Function Section, = length of section in bytes
+        0x03, 6, // 03 = Function Section, = length of section in bytes
+        0x05, // =function count
 
-        // main() -> void
-        0x01, // = 1 function
-        0x02, // = type index
+        0x02, // = type index -- main()
+        0x03, // = type index -- WordToCMD()
+        0x03, // = type index -- WordToI32()
+        0x04, // = type index -- IntoULEB128()
+        0x05, // = type index -- WriteULEB128()
 
         // MEMORY
         0x05, 3, // 05 = Memory Section, = length of section in bytes
@@ -97,133 +152,326 @@ function createWasmFile() {
         0x02, 0x00, // 02 = export kind (memory), 00 = memory index (0)
 
         // CODE SECTION
-        0x0A, 149, 0x01, // 0A = Code Section, = length of section ULEB128 encoded
-        0x01, // = function body of function (main)
-        
-        // main()
-        146, 0x01, // = size of function body in bytes ULEB128 encoded
-        
-        0x01, // = local variable declaration count
-        0x03, 0x7F, // (bytes), (char), (lastWasEOF)
+        0x0A
+    ];
+    const b3 = [
+        0x05, // = Number of functions
+    ];
+    const mainVars = { 
+        bytes: 0,
+        char: 1,
+        cmd: 2,
+        number: 3,
+        startWord: 4,
+        wordLength: 5,
+        stateCMD: 6,
+        lastWasEOF: 7
+    }
+    const b5_main = [
+        1, // = local variable declaration group count
+        0x08, 0x7F, // byets, char, cmd, number, startWord, wordLength, stateCMD, lastWasEOF
 
-        0x02, 0x40, // block -> null
-        0x03, 0x40, // loop -> null
+        cmd('block'), 0x40, // block -> null
+        cmd('loop'), 0x40, // loop -> null
         
         // char = memory[bytes]
-        0x20, 0x00, // local.get 0 (bytes)
-        0x2D, 0x00, 0x00, // i32.load8_u align=0 offset=0
-        0x21, 0x01, // local.set 1 (char)
+        cmd('local.get'), mainVars['bytes'],
+        cmd('i32.load8_u'), 0, 0,
+        cmd('local.set'), mainVars['char'], 
 
         // bytes = bytes + 1
-        0x20, 0x00, // local.get 0 (bytes)
-        0x41, 1, // i32.const 1
-        0x6A, // i32.add
-        0x21, 0x00, // local.set 0 (bytes)
-
-        // ----------------------------- add
-        // char == 97
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xE1, 0x00, // i32.const 97
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x6A
-        0x41, 0xEA, 0x00, // i32.const 0x6A
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
-
-        // ----------------------------- i32.const
-        // char == 105
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xE9, 0x00, // i32.const 105
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x41
-        0x41, 0xC1, 0x00, // i32.const 0x41
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
-
-        // ----------------------------- call
-        // char == 99
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xE3, 0x00, // i32.const 99
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x10
-        0x41, 0x10, // i32.const 0x10
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
-
-        // ----------------------------- i32.get
-        // char == 103
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xE7, 0x00, // i32.const 103
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x20
-        0x41, 0x20, // i32.const 0x20
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
-
-        // ----------------------------- i32.set
-        // char == 115
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xF3, 0x00, // i32.const 115
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x21
-        0x41, 0x21, // i32.const 0x21
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
-
-        // ----------------------------- i32.load8_u
-        // char == 108
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xEC, 0x00, // i32.const 108
-        0x46, // i32.eq 
-        0x04, 0x40, // if -> null
-        // char = 0x2D
-        0x41, 0x2D, // i32.const 0x2D
-        0x21, 0x01, // local.set 1 (char)
-        0x0B, // end [if]
+        cmd('local.get'), mainVars['bytes'], 
+        cmd('i32.const'), 1, 
+        cmd('i32.add'), 
+        cmd('local.set'), mainVars['bytes'], 
 
         // write_char(char)
-        0x20, 0x01, // local.get 1 (char)
-        0x10, 1, // call 1
+        cmd('local.get'), mainVars['char'], 
+        cmd('call'), 1,
 
         // lastWasEOF == 1
-        0x20, 0x02, // local.get 2 (lastWasEOF)
-        0x41, 1, // i32.const 1
-        0x46, // i32.eq
-        0x04, 0x40, // if -> null
+        cmd('local.get'), mainVars['lastWasEOF'], 
+        cmd('i32.const'), 1, 
+        cmd('i32.eq'),
+        cmd('if'), 0x40, // if -> null
         // char == 0xFE (EOF)
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xFE, 0x01, // i32.const 0xFE
-        0x46, // i32.eq
-        0x0D, 0x02, // br_if (if=0, loop=1, block=2)
-        0x0B, // end [if]
+        cmd('local.get'), mainVars['char'],
+        cmd('i32.const'), ...ULEB128(0xFE),
+        cmd('i32.eq'),
+        cmd('br_if'), 2, // br_if (if=0, loop=1, block=2)
+        cmd('end'), // end [if]
         
         // char == 0xFE (EOF)
-        0x20, 0x01, // local.get 1 (char)
-        0x41, 0xFE, 0x01, // i32.const 0xFE
-        0x46, // i32.eq
-        0x04, 0x7F, // if -> i32
-        0x41, 1, // i32.const 1
-        0x05, // else 
-        0x41, 0, // i32.const 0
-        0x0B, // end [if]
-        0x21, 0x02, // local.set 2 (lastWasEOF)
+        cmd('local.get'), mainVars['char'], 
+        cmd('i32.const'), ...ULEB128(0xFE),
+        cmd('i32.eq'),
+        cmd('if'), 0x7F, // if -> i32
+        cmd('i32.const'), 1,
+        cmd('else'), 
+        cmd('i32.const'), 0,
+        cmd('end'), // end [if]
+        cmd('local.set'), mainVars['lastWasEOF'],
 
-        0x0C, 0x00, // br (loop=0, block=1)
+        cmd('br'), 0, // br (loop=0, block=1)
 
-        0x0B, // end [loop]
-        0x0B, // end [block]
+        cmd('end'), // end [loop]
+        cmd('end'), // end [block]
 
         // print_i32(bytes)
-        0x20, 0, // local.get 0 (bytes)
-        0x10, 0, // call 0
+        cmd('local.get'), mainVars['bytes'],
+        cmd('call'), 0, 
 
-        0x0B // end
-    ]);
+        cmd('end') // end
+    ];
+    const wordToCMDVars = { startWord: 0, wordLength: 1 };
+    const b7_WordToCMD = [
+        0, // = local variable declaration group count
+
+        //if wordLength == 3 && memory[startWord] == 'a' && memory[startWord + 1] == 'd' && memory[startWord + 2] == 'd' {
+        //    return 0x6A // opcode for `i32.add`
+        //}
+        //return 0xFB
+
+        // wordLength == 3
+        cmd('i32.const'), 3,
+        cmd('local.get'), wordToCMDVars['wordLength'],
+        cmd('i32.eq'),
+        // pushes value to stack
+
+        // memory[startWord] == 'a'
+        cmd('i32.const'), ...ULEB128(97),
+        cmd('local.get'), wordToCMDVars['startWord'],
+        cmd('i32.load8_u'), 0, 0,
+        // pushes value to stack
+
+        // memory[startWord + 1] == 'd'
+        cmd('i32.const'), ...ULEB128(100),
+        cmd('local.get'), wordToCMDVars['startWord'],
+        cmd('i32.const'), 1,
+        cmd('i32.add'),
+        cmd('i32.load8_u'), 0, 0,
+        // pushes value to stack
+
+        // memory[startWord + 2] == 'd'
+        cmd('i32.const'), ...ULEB128(100),
+        // on top of previous stack
+        // ... | --- |
+        // ... | 'd' |
+        // ... | --- |
+        cmd('local.get'), wordToCMDVars['startWord'],
+        // ... | --- | --- |
+        // ... | 'd' |  5  | -- assuming 5
+        // ... | --- | --- |
+        cmd('i32.const'), 2,
+        // ... | --- | --- | --- |
+        // ... | 'd' |  5  |  2  |
+        // ... | --- | --- | --- |
+        cmd('i32.add'),
+        // ... | --- | --- |
+        // ... | 'd' |  7  |
+        // ... | --- | --- |
+        cmd('i32.load8_u'), 0, 0,
+        // ... | --- | --- |
+        // ... | 'd' | 100 |
+        // ... | --- | --- |
+        cmd('i32.eq'),
+        // ... | --- |
+        // ... |  1  |
+        // ... | --- |
+        // pushes value to stack
+
+        // stack -- assuming all true:
+        // | --- | --- | --- | --- |
+        // |  1  |  1  |  1  |  1  |
+        // | --- | --- | --- | --- |
+
+        cmd('i32.eq'),
+        // | --- | --- | --- |
+        // |  1  |  1  |  1  |
+        // | --- | --- | --- |
+        cmd('i32.eq'),
+        // | --- | --- |
+        // |  1  |  1  |
+        // | --- | --- |
+        cmd('i32.eq'),
+        // | --- |
+        // |  1  |
+        // | --- |
+
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...ULEB128(0x6A), // opcode for `i32.add`
+        cmd('return'), 
+        cmd('end'), // end [if]
+        
+        cmd('i32.const'), ...ULEB128(0xFB), // error code
+        cmd('return'),
+
+        cmd('end')
+    ];
+    const wordToI32Vars = { startWord: 0, wordLength: 1, char: 2, digit: 3, product: 4, index: 5 };
+    const b9_WordToI32 = [
+        1, // = local variable declaration group count
+        0x04, 0x7F, // char, digit, product, index
+
+        cmd('loop'), 0x40, // loop -> void
+
+        //char = memory[startWord + index]
+        //
+        //if char < '0' as i32 || char > '9' {
+        //    return 0xFC
+        //}
+        //
+        //digit = char - 48
+        //product = product * 10 + digit
+        //
+        //index = index + 1
+        //if index < wordLength {
+        //    goto loop
+        //}
+
+        // char = memory[startWord + index]
+        cmd('local.get'), wordToI32Vars['startWord'],
+        cmd('local.get'), wordToI32Vars['index'],
+        cmd('i32.add'),
+        cmd('i32.load8_u'), 0, 0,
+        cmd('local.set'), wordToI32Vars['char'],
+
+        // if char < '0' as i32 || char > '9' { return 0xFC }
+        cmd('local.get'), wordToI32Vars['char'],
+        cmd('i32.const'), 48,
+        cmd('i32.lt_u'),
+        cmd('local.get'), wordToI32Vars['char'],
+        cmd('i32.const'), 57,
+        cmd('i32.gt_u'),
+        cmd('i32.or'),
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...ULEB128(0xFC), // error code
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        // digit = char - 48
+        cmd('local.get'), wordToI32Vars['char'],
+        cmd('i32.const'), 48,
+        cmd('i32.sub'),
+        cmd('local.set'), wordToI32Vars['digit'],
+
+        // product = product * 10 + digit
+        cmd('local.get'), wordToI32Vars['product'],
+        cmd('i32.const'), 10,
+        cmd('i32.mul'),
+        cmd('local.get'), wordToI32Vars['digit'],
+        cmd('i32.add'),
+        cmd('local.set'), wordToI32Vars['product'],
+
+        // index = index + 1
+        cmd('local.get'), wordToI32Vars['index'],
+        cmd('i32.const'), 1,
+        cmd('i32.add'),
+        cmd('local.set'), wordToI32Vars['index'],
+
+        // index < wordLength
+        cmd('local.get'), wordToI32Vars['index'],
+        cmd('local.get'), wordToI32Vars['wordLength'],
+        cmd('i32.lt_u'),
+        cmd('br_if'), 0x00, // (loop=0) branches to loop
+
+        cmd('end'),
+
+        cmd('i32.const'), 1,
+        cmd('return'),
+
+        cmd('end')
+    ];
+    const intoULEB128Vars = { number: 0, bytes: 1 };
+    const b11_IntoULEB128 = [
+        1, // = local variable declaration group count
+        0x01, 0x7F, // bytes
+
+        //var byte: i32 = number & 0x7F
+        //if number >= 128 {
+        //    byte = byte | 0x80
+        //}
+        //return byte
+
+        // byte = number & 0x7F
+        cmd('local.get'), intoULEB128Vars['number'],
+        cmd('i32.const'), 127,
+        cmd('i32.and'),
+        cmd('local.set'), intoULEB128Vars['byte'],
+
+        // if number >= 128 { byte = byte | 0x80 }
+        cmd('local.get'), intoULEB128Vars['number'],
+        cmd('i32.const'), ...ULEB128(128),
+        cmd('i32.ge_u'),
+        cmd('if'), 0x40, // if -> void
+        cmd('local.get'), intoULEB128Vars['byte'],
+        cmd('i32.const'), ...ULEB128(0x80),
+        cmd('i32.or'),
+        cmd('local.set'), intoULEB128Vars['byte'],
+        cmd('end'), // end [if]
+
+        // return byte
+        cmd('local.get'), intoULEB128Vars['byte'],
+        cmd('return'),
+
+        cmd('end')
+    ];
+    const writeULEB128Vars = { number: 0, bytes: 1, bytesWritten: 2 };
+    const b13_WriteULEB128 = [
+        1, // = local variable declaration group count
+        0x02, 0x7F, // bytes, bytesWritten
+
+        cmd('loop'), 0x40, // loop -> void
+
+        //byte = IntoULEB128(number)
+        //write_char(byte)
+        //bytesWritten = bytesWritten + 1
+        //number = number >> 7
+        //if number > 0 {
+        //    goto loop
+        //} // else, reaches 'end' and breaks
+
+        // byte = IntoULEB128(number)
+        cmd('local.get'), writeULEB128Vars['number'],
+        cmd('call'), 0x06, // IntoULEB128(number)
+        cmd('local.set'), writeULEB128Vars['byte'],
+
+        // write_char(byte)
+        cmd('local.get'), writeULEB128Vars['byte'],
+        cmd('call'), 0x01, // write_char(i32)
+
+        // bytesWritten = bytesWritten + 1
+        cmd('local.get'), writeULEB128Vars['bytesWritten'],
+        cmd('i32.const'), 1,
+        cmd('i32.add'),
+        cmd('local.set'), writeULEB128Vars['bytesWritten'],
+
+        // number = number >> 7
+        cmd('local.get'), writeULEB128Vars['number'],
+        cmd('i32.const'), 7,
+        cmd('i32.shr_u'),
+        cmd('local.set'), writeULEB128Vars['number'],
+
+        // number > 0
+        cmd('local.get'), writeULEB128Vars['number'],
+        cmd('i32.const'), 0,
+        cmd('i32.gt_u'),
+        cmd('br_if'), 0x00, // (loop=0) branches to loop
+        
+        cmd('end')
+    ];
+
+    const b4 = ULEB128(b5_main.length);
+    const b6 = ULEB128(b7_WordToCMD.length);
+    const b8 = ULEB128(b9_WordToI32.length);
+    const b10 = ULEB128(b11_IntoULEB128.length);
+    const b12 = ULEB128(b13_WriteULEB128.length);
+
+    const b2 = ULEB128(b3.length + b4.length + b5_main.length + b6.length + b7_WordToCMD.length + b8.length + b9_WordToI32.length + b10.length + b11_IntoULEB128.length + b12.length + b13_WriteULEB128.length);
+    
+    const bytes = [...b1, ...b2, ...b3, ...b4, ...b5_main, ...b6, ...b7_WordToCMD, ...b8, ...b9_WordToI32, ...b10, ...b11_IntoULEB128, ...b12, ...b13_WriteULEB128];
+
+    const wasmBytes = new Uint8Array(bytes);
 
     fs.writeFileSync('./program.wasm', wasmBytes);
 }
