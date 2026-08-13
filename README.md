@@ -243,7 +243,7 @@ function main() -> void {
                 
                 write_char(cmd)
             }
-            if stateCMD == 0 { // End Of Argument
+            else if stateCMD == 0 { // End Of Argument
                 number = WordToI32(startWord, wordLength)
 
                 if number == 0xFC { // check for error
@@ -260,7 +260,7 @@ function main() -> void {
 
         // if valid char
         if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
-            if stateCMD {
+            if stateCMD == 1 {
                 stateCMD = 2
             }
             wordLength = wordLength + 1

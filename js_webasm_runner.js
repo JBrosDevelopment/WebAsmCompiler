@@ -80,7 +80,29 @@ function ULEB128(number) {
     return bytes;
 }
 
+function SLEB128(value) {
+    const bytes = [];
+    value |= 0;
+
+    let more = true;
+
+    while (more) {
+        let byte = value & 0x7F;
+        value >>= 7;
+        if ((value === 0 && (byte & 0x40) === 0) || (value === -1 && (byte & 0x40) !== 0)) {
+            more = false;
+        } else {
+            byte |= 0x80;
+        }
+
+        bytes.push(byte);
+    }
+
+    return bytes;
+}
+
 function createWasmFile() {
+    const functions = {print_i32: 0, write_char: 1, main: 2, WordToCMD: 3, WordToI32: 4, IntoULEB128: 5, IntoSLEB128: 6};
     const b1 = [
         // HEADER
         0x00, 0x61, 0x73, 0x6D, // magic number
@@ -171,55 +193,275 @@ function createWasmFile() {
         1, // = local variable declaration group count
         0x08, 0x7F, // byets, char, cmd, number, startWord, wordLength, stateCMD, lastWasEOF
 
+    //    block loop:
+    //    char = memory[bytes]
+    //
+    //    if char == '\n' as i32 {
+    //        stateCMD = 1 // next byte is command
+    //        startWord = bytes + 1
+    //    }
+    //    if char == ' ' as i32 || char == '\t' as i32 {
+    //        if stateCMD == 2 { // End Of Command
+    //            stateCMD = 0
+    //            cmd = WordToCMD(startWord, wordLength)
+    //            if cmd == 0xFB { // check for error
+    //                print_i32(0xFB)
+    //                return
+    //            }
+    //            write_char(cmd)
+    //        }
+    //        else if stateCMD == 0 { // End Of Argument
+    //            number = WordToI32(startWord, wordLength)
+    //            if number == 0xFC { // check for error
+    //                print_i32(0xFC)
+    //                return
+    //            }
+    //            writeULEB128(number)
+    //        }
+    //        startWord = bytes + 1 // next byte is start of word
+    //        wordLength = 0
+    //        continue
+    //    }
+    //    if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
+    //        if stateCMD == 1 {
+    //            stateCMD = 2
+    //        }
+    //        wordLength = wordLength + 1
+    //    } else {
+    //        print_i32(0xFD) // error code invalid char
+    //        return
+    //    }
+    //
+    //    if lastWasEOF == 1 && char == ENDOFFILEBYTE {
+    //        break
+    //    }
+    //    lastWasEOF = if char == ENDOFFILEBYTE { 1 } else { 0 }
+    //    bytes = bytes + 1
+    //    goto loop
+    //end
+    //// END OF FILE SEQUENCE
+    //write_char(0xFE)
+    //write_char(0xFE)
+    //
+    //print_i32(bytes)
+
         cmd('block'), 0x40, // block -> null
-        cmd('loop'), 0x40, // loop -> null
-        
-        // char = memory[bytes]
-        cmd('local.get'), mainVars['bytes'],
-        cmd('i32.load8_u'), 0, 0,
-        cmd('local.set'), mainVars['char'], 
+            cmd('loop'), 0x40, // loop -> null
+            
+            // char = memory[bytes]
+            cmd('local.get'), mainVars['bytes'],
+            cmd('i32.load8_u'), 0, 0,
+            cmd('local.set'), mainVars['char'],
 
-        // bytes = bytes + 1
-        cmd('local.get'), mainVars['bytes'], 
-        cmd('i32.const'), 1, 
-        cmd('i32.add'), 
-        cmd('local.set'), mainVars['bytes'], 
+            //if char == '\n' { stateCMD = 1; startWord = bytes + 1 }
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('\n'.charCodeAt(0)),
+            cmd('i32.eq'),
+            cmd('if'), 0x40, // if -> null
+                cmd('i32.const'), 1,
+                cmd('local.set'), mainVars['stateCMD'],
+                cmd('local.get'), mainVars['bytes'],
+                cmd('i32.const'), 1,
+                cmd('i32.add'),
+                cmd('local.set'), mainVars['startWord'],
+            cmd('end'), // end [if]
 
-        // write_char(char)
-        cmd('local.get'), mainVars['char'], 
-        cmd('call'), 1,
+            // if char == ' ' || char == '\t' 
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128(' '.charCodeAt(0)),
+            cmd('i32.eq'),
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('\t'.charCodeAt(0)),
+            cmd('i32.eq'),
+            cmd('i32.or'),
+            cmd('if'), 0x40, // if -> null
+                // if stateCMD == 2
+                cmd('local.get'), mainVars['stateCMD'],
+                cmd('i32.const'), 2,
+                cmd('i32.eq'),
+                cmd('if'), 0x40, // if -> null
+                    // stateCMD = 0
+                    cmd('i32.const'), 0,
+                    cmd('local.set'), mainVars['stateCMD'],
 
-        // lastWasEOF == 1
-        cmd('local.get'), mainVars['lastWasEOF'], 
-        cmd('i32.const'), 1, 
-        cmd('i32.eq'),
-        cmd('if'), 0x40, // if -> null
-        // char == 0xFE (EOF)
-        cmd('local.get'), mainVars['char'],
-        cmd('i32.const'), ...ULEB128(0xFE),
-        cmd('i32.eq'),
-        cmd('br_if'), 2, // br_if (if=0, loop=1, block=2)
-        cmd('end'), // end [if]
-        
-        // char == 0xFE (EOF)
-        cmd('local.get'), mainVars['char'], 
-        cmd('i32.const'), ...ULEB128(0xFE),
-        cmd('i32.eq'),
-        cmd('if'), 0x7F, // if -> i32
-        cmd('i32.const'), 1,
-        cmd('else'), 
-        cmd('i32.const'), 0,
-        cmd('end'), // end [if]
-        cmd('local.set'), mainVars['lastWasEOF'],
+                    // cmd = WordToCMD(startWord, wordLength)
+                    cmd('local.get'), mainVars['startWord'],
+                    cmd('local.get'), mainVars['wordLength'],
+                    cmd('call'), functions['WordToCMD'],
+                    cmd('local.set'), mainVars['cmd'],
+                    
+                    // if cmd == 0xFB { print_i32(0xFB); return; }
+                    cmd('local.get'), mainVars['cmd'],
+                    cmd('i32.const'), ...ULEB128(0xFB),
+                    cmd('i32.eq'),
+                    cmd('if'), 0x40, // if -> null
+                        cmd('i32.const'), ...ULEB128(0xFB),
+                        cmd('call'), functions['print_i32'],
+                        cmd('return'),
+                    cmd('end'), // end [if]
 
-        cmd('br'), 0, // br (loop=0, block=1)
+                    // write_char(cmd)
+                    cmd('local.get'), mainVars['cmd'],
+                    cmd('call'), functions['write_char'],
+                cmd('else'), 0x40, // else -> null
+                    // if stateCMD == 0
+                    cmd('local.get'), mainVars['stateCMD'],
+                    cmd('i32.const'), 0,
+                    cmd('i32.eq'),
+                    cmd('if'), 0x40, // if -> null
+                        // number = WordToI32(startWord, wordLength)
+                        cmd('local.get'), mainVars['startWord'],
+                        cmd('local.get'), mainVars['wordLength'],
+                        cmd('call'), functions['WordToI32'],
+                        cmd('local.set'), mainVars['number'],
+                        
+                        // if number == 0xFC { print_i32(0xFC); return; }
+                        cmd('local.get'), mainVars['number'],
+                        cmd('i32.const'), ...ULEB128(0xFC),
+                        cmd('i32.eq'),
+                        cmd('if'), 0x40, // if -> null
+                            cmd('i32.const'), ...ULEB128(0xFC),
+                            cmd('call'), functions['print_i32'],
+                            cmd('return'),
+                        cmd('end'), // end [if]
 
-        cmd('end'), // end [loop]
+                        // writeULEB128(number)
+                        cmd('local.get'), mainVars['number'],
+                        cmd('call'), functions['writeULEB128'],
+                    cmd('end'), // end [if]
+                cmd('end'), // end [if]
+                
+                // startWord = bytes + 1
+                cmd('local.get'), mainVars['bytes'],
+                cmd('i32.const'), 1,
+                cmd('i32.add'),
+                cmd('local.set'), mainVars['startWord'],
+
+                // wordLength = 0
+                cmd('i32.const'), 0,
+                cmd('local.set'), mainVars['wordLength'],
+                
+                // continue
+                cmd('br'), 1, // (if=0, loop=1, block=2)
+            cmd('end'), // end [if]
+
+            // if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_'
+            // (char >= 'a' && char <= 'z')
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('a'.charCodeAt(0)),
+            cmd('i32.ge_u'), // pushes 1
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('z'.charCodeAt(0)),
+            cmd('i32.le_u'), // pushes 1
+            cmd('i32.and'), // pops both and pushes 1
+            // stack: (assuming char is letter a-z)
+            // | --- |
+            // |  1  |
+            // | --- |
+            // (char >= 'A' && char <= 'Z')
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('A'.charCodeAt(0)),
+            cmd('i32.ge_u'), // pushes 1
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('Z'.charCodeAt(0)),
+            cmd('i32.le_u'), // pushes 1
+            cmd('i32.and'), // pops both and pushes 1
+            // stack: (assuming char is letter a-z)
+            // | --- | --- |
+            // |  1  |  0  |
+            // | --- | --- |
+            // (char >= '0' && char <= '9')
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('0'.charCodeAt(0)),
+            cmd('i32.ge_u'), // pushes 0
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('9'.charCodeAt(0)),
+            cmd('i32.le_u'), // pushes 0
+            cmd('i32.and'), // pops both and pushes 0
+            // stack: (assuming char is letter a-z)
+            // | --- | --- | --- |
+            // |  1  |  0  |  0  |
+            // | --- | --- | --- |
+            // char == '_'
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('_'.charCodeAt(0)),
+            cmd('i32.eq'), // pushes 0
+            // stack: (assuming char is letter a-z)
+            // | --- | --- | --- | --- |
+            // |  1  |  0  |  0  |  0  |
+            // | --- | --- | --- | --- |
+            cmd('i32.or'),
+            // | --- | --- | --- |
+            // |  1  |  0  |  0  |
+            // | --- | --- | --- |
+            cmd('i32.or'),
+            // | --- | --- |
+            // |  1  |  0  |
+            // | --- | --- |
+            cmd('i32.or'),
+            // | --- |
+            // |  1  |
+            // | --- |
+            cmd('if'), 0x40, // if -> null
+                // if stateCMD == 1 { stateCMD = 2 }
+                cmd('local.get'), mainVars['stateCMD'],
+                cmd('i32.const'), 1,
+                cmd('i32.eq'),
+                cmd('if'), 0x40, // if -> null
+                    cmd('i32.const'), 2,
+                    cmd('local.set'), mainVars['stateCMD'],
+                cmd('end'), // end [if]
+
+                // wordLength = wordLength + 1
+                cmd('local.get'), mainVars['wordLength'],
+                cmd('i32.const'), 1,
+                cmd('i32.add'),
+                cmd('local.set'), mainVars['wordLength'],
+            cmd('else'), 0x40, // else -> null
+                // print_i32(0xFD)
+                cmd('i32.const'), ...ULEB128(0xFD),
+                cmd('call'), functions['print_i32'],
+                // return
+                cmd('return'),
+            cmd('end'), // end [if]
+            
+            // lastWasEOF == 1
+            cmd('local.get'), mainVars['lastWasEOF'], 
+            cmd('i32.const'), 1, 
+            cmd('i32.eq'),
+            cmd('if'), 0x40, // if -> null
+                // char == 0xFE (EOF)
+                cmd('local.get'), mainVars['char'],
+                cmd('i32.const'), ...ULEB128(0xFE),
+                cmd('i32.eq'),
+                cmd('br_if'), 2, // br_if (if=0, loop=1, block=2)
+            cmd('end'), // end [if]
+            
+            // char == 0xFE (EOF)
+            cmd('local.get'), mainVars['char'], 
+            cmd('i32.const'), ...ULEB128(0xFE),
+            cmd('i32.eq'),
+            cmd('if'), 0x7F, // if -> i32
+                cmd('i32.const'), 1,
+            cmd('else'), 
+                cmd('i32.const'), 0,
+            cmd('end'), // end [if]
+            cmd('local.set'), mainVars['lastWasEOF'],
+
+            // bytes = bytes + 1
+            cmd('local.get'), mainVars['bytes'], 
+            cmd('i32.const'), 1, 
+            cmd('i32.add'), 
+            cmd('local.set'), mainVars['bytes'], 
+
+            cmd('br'), 0, // br (loop=0, block=1)
+
+            cmd('end'), // end [loop]
         cmd('end'), // end [block]
 
         // print_i32(bytes)
         cmd('local.get'), mainVars['bytes'],
-        cmd('call'), 0, 
+        cmd('call'), functions['print_i32'], 
 
         cmd('end') // end
     ];
@@ -382,10 +624,10 @@ function createWasmFile() {
 
         cmd('end')
     ];
-    const intoULEB128Vars = { number: 0, bytes: 1 };
+    const intoULEB128Vars = { number: 0, byte: 1 };
     const b11_IntoULEB128 = [
         1, // = local variable declaration group count
-        0x01, 0x7F, // bytes
+        0x01, 0x7F, // byte
 
         //var byte: i32 = number & 0x7F
         //if number >= 128 {
@@ -395,7 +637,7 @@ function createWasmFile() {
 
         // byte = number & 0x7F
         cmd('local.get'), intoULEB128Vars['number'],
-        cmd('i32.const'), 127,
+        cmd('i32.const'), ...SLEB128(127),
         cmd('i32.and'),
         cmd('local.set'), intoULEB128Vars['byte'],
 
@@ -416,10 +658,10 @@ function createWasmFile() {
 
         cmd('end')
     ];
-    const writeULEB128Vars = { number: 0, bytes: 1, bytesWritten: 2 };
+    const writeULEB128Vars = { number: 0, byte: 1, bytesWritten: 2 };
     const b13_WriteULEB128 = [
         1, // = local variable declaration group count
-        0x02, 0x7F, // bytes, bytesWritten
+        0x02, 0x7F, // byte, bytesWritten
 
         cmd('loop'), 0x40, // loop -> void
 
@@ -433,12 +675,12 @@ function createWasmFile() {
 
         // byte = IntoULEB128(number)
         cmd('local.get'), writeULEB128Vars['number'],
-        cmd('call'), 0x06, // IntoULEB128(number)
+        cmd('call'), functions['IntoULEB128'],
         cmd('local.set'), writeULEB128Vars['byte'],
 
         // write_char(byte)
         cmd('local.get'), writeULEB128Vars['byte'],
-        cmd('call'), 0x01, // write_char(i32)
+        cmd('call'), functions['write_char'],
 
         // bytesWritten = bytesWritten + 1
         cmd('local.get'), writeULEB128Vars['bytesWritten'],
@@ -458,6 +700,8 @@ function createWasmFile() {
         cmd('i32.gt_u'),
         cmd('br_if'), 0x00, // (loop=0) branches to loop
         
+        cmd('end'), // end [loop]
+
         cmd('end')
     ];
 
