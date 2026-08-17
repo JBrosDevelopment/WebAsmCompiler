@@ -221,17 +221,20 @@ function main() -> void {
     var startWord: i32 = 0
     var wordLength: i32 = 0
     var stateCMD: i32 = 0 // 0=not command byte, 1=next byte is command, 2=byte is command
-    var lastWasEOF: i32 = 0
 
     block loop:
         char = memory[bytes]
+
+        if char == ENDOFFILEBYTE {
+            break
+        }
 
         if char == '\n' as i32 {
             stateCMD = 1 // next byte is command
             startWord = bytes + 1
         }
 
-        if char == ' ' as i32 || char == '\t' as i32 {
+        else if char == ' ' as i32 || char == '\t' as i32 {
             if stateCMD == 2 { // End Of Command
                 stateCMD = 0
                 cmd = WordToCMD(startWord, wordLength)
@@ -259,7 +262,7 @@ function main() -> void {
         }
 
         // if valid char
-        if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
+        else if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
             if stateCMD == 1 {
                 stateCMD = 2
             }
@@ -268,11 +271,6 @@ function main() -> void {
             print_i32(0xFD) // error code invalid char
             return
         }
-
-        if lastWasEOF == 1 && char == ENDOFFILEBYTE {
-            break
-        }
-        lastWasEOF = if char == ENDOFFILEBYTE { 1 } else { 0 }
 
         bytes = bytes + 1
         goto loop
@@ -400,13 +398,11 @@ function IntoULEB128(number: i32) -> i32 {
 
 function WriteULEB128(number: i32) -> void {
     var byte: i32 = 0
-    var bytesWritten: i32 = 0
 
     loop: // no block because no need to break out, instead code reaches 'end' and breaks
         byte = IntoULEB128(number)
         write_char(byte)
 
-        bytesWritten = bytesWritten + 1
         number = number >> 7
 
         if number > 0 {
