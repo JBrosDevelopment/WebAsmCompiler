@@ -220,10 +220,11 @@ function main() -> void {
     var number: i32 = 0
     var startWord: i32 = 0
     var wordLength: i32 = 0
-    var stateCMD: i32 = 0 // 0=not command byte, 1=next byte is command, 2=byte is command
+    var stateCMD: i32 = 1 // 0=not command byte, 1=next byte is command, 2=byte is command
 
     block loop:
         char = memory[bytes]
+        bytes = bytes + 1
 
         if char == ENDOFFILEBYTE {
             break
@@ -234,7 +235,7 @@ function main() -> void {
             startWord = bytes + 1
         }
 
-        else if char == ' ' as i32 || char == '\t' as i32 {
+        else if char == ' ' as i32 || char == '\t' as i32 || char == ';' as i32 {
             if stateCMD == 2 { // End Of Command
                 stateCMD = 0
                 cmd = WordToCMD(startWord, wordLength)
@@ -258,7 +259,7 @@ function main() -> void {
             }
             startWord = bytes + 1 // next byte is start of word
             wordLength = 0
-            continue
+            goto loop
         }
 
         // if valid char
@@ -272,12 +273,10 @@ function main() -> void {
             return
         }
 
-        bytes = bytes + 1
         goto loop
     end
 
     // END OF FILE SEQUENCE
-    write_char(0xFE)
     write_char(0xFE)
     
     print_i32(bytes)
