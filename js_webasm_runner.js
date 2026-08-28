@@ -262,10 +262,14 @@ function createWasmFile() {
             cmd('i32.add'), 
             cmd('local.set'), mainVars['bytes'], 
 
-            // char == 0xFE (EOF)
+            // char == 0xFE (EOF) || char == `|` as i32 (this is for ascii character for easaier writing cwa file)
             cmd('local.get'), mainVars['char'],
             cmd('i32.const'), ...ULEB128(0xFE),
             cmd('i32.eq'),
+            cmd('local.get'), mainVars['char'],
+            cmd('i32.const'), ...ULEB128('|'.charCodeAt(0)),
+            cmd('i32.eq'),
+            cmd('i32.or'),
             cmd('br_if'), 1, // br_if (loop=0, block=1)
 
             //if char == '\n' || char == '\r' { stateCMD = 1; startWord = bytes + 1; goto loop }
@@ -442,6 +446,8 @@ function createWasmFile() {
                 cmd('local.set'), mainVars['wordLength'],
             cmd('else'),
                 // print_i32(0xFD)
+                cmd('local.get'), mainVars['char'],
+                cmd('call'), functions['print_i32'],
                 cmd('i32.const'), ...ULEB128(0xFD),
                 cmd('call'), functions['print_i32'],
                 // return
@@ -452,10 +458,6 @@ function createWasmFile() {
 
             cmd('end'), // end [loop]
         cmd('end'), // end [block]
-
-        // write_char(0xFE)
-        cmd('i32.const'), ...ULEB128(0xFE),
-        cmd('call'), functions['write_char'],
 
         // print_i32(bytes)
         cmd('local.get'), mainVars['bytes'],
@@ -472,19 +474,18 @@ function createWasmFile() {
         //}
         //return 0xFB
 
+        // add
+        //////////////////////////////////////////////////////////////////////////
         // wordLength == 3
         cmd('i32.const'), 3, // stackLength: 1
         cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
         cmd('i32.eq'), // stackLength: 1
-
         // memory[startWord] == 'a'
         cmd('i32.const'), ...SLEB128('a'.charCodeAt(0)), // stackLength: 2
         cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
         cmd('i32.load8_u'), 0, 0, // stackLength: 3
         cmd('i32.eq'), // stackLength: 2
-        
         cmd('i32.and'), // stack length 1
-
         // memory[startWord + 1] == 'd'
         cmd('i32.const'), ...SLEB128('d'.charCodeAt(0)), // stackLength: 2
         cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
@@ -492,9 +493,7 @@ function createWasmFile() {
         cmd('i32.add'), // stackLength: 3
         cmd('i32.load8_u'), 0, 0, // stackLength: 3
         cmd('i32.eq'), // stackLength: 2
-
         cmd('i32.and'), // stackLength: 1
-
         // memory[startWord + 2] == 'd'
         cmd('i32.const'), ...SLEB128('d'.charCodeAt(0)), // stackLength: 2
         cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
@@ -502,11 +501,689 @@ function createWasmFile() {
         cmd('i32.add'), // stackLength: 3
         cmd('i32.load8_u'), 0, 0, // stackLength: 3
         cmd('i32.eq'), // stackLength: 2
-
         cmd('i32.and'), // stackLength: 1
-
         cmd('if'), 0x40, // if -> void
         cmd('i32.const'), ...SLEB128(0x6A), // opcode for `i32.add`
+        cmd('return'), 
+        cmd('end'), // end [if]
+        //////////////////////////////////////////////////////////////////////////
+
+        /// mul //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('m'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('u'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x6C), // opcode for `i32.mul`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// sub //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('s'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('u'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('b'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x6B), // opcode for `i32.sub`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// and //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('a'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('n'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('d'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x71), // opcode for `i32.and`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// or ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x72), // opcode for `i32.or`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// shr //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('s'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('h'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x76), // opcode for `i32.shr_u`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// const ////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 5, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('c'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('n'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('s'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 4, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x41), // opcode for `i32.const`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// call /////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 4, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('c'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('a'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x10), // opcode for `call`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// set //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('s'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x21), // opcode for `local.set`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// get //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('g'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x20), // opcode for `local.get`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// load /////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 4, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('a'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('d'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x2D), // opcode for `load`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// if ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('i'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('f'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x04), // opcode for `if`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// else /////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 4, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('s'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x05), // opcode for `else`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// block ////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 5, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('b'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('c'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('k'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 4, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x02), // opcode for `block`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// loop /////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 4, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('o'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('p'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x03), // opcode for `loop`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// end //////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('n'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('d'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x0B), // opcode for `end`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// br ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('b'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0xC4), // opcode for `br`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// br_if ////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 5, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('b'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('_'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('i'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('f'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 4, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x0D), // opcode for `br_if`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// ret ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 3, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x0F), // opcode for `return`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// eq ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('q'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x46), // opcode for `i32.eq`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// nq ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('n'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('q'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x47), // opcode for `i32.nq_u`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// lt ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x49), // opcode for `i32.eq_u`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// le ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('l'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x4D), // opcode for `i32.le_u`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// gt ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('g'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x4B), // opcode for `i32.gt_u`
+        cmd('return'), 
+        cmd('end'), // end [if]
+
+        /// ge ///////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 2, // stackLength: 1
+        cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
+        cmd('i32.eq'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('g'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stack length 1
+        cmd('i32.const'), ...SLEB128('e'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 1, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('if'), 0x40, // if -> void
+        cmd('i32.const'), ...SLEB128(0x4F), // opcode for `i32.ge_u`
         cmd('return'), 
         cmd('end'), // end [if]
         

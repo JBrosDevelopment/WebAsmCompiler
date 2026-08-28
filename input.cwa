@@ -1,4 +1,24 @@
 add 44 3;
-add 6 7;
-
-ý
+mul 7 5;
+sub 5 4;
+and 9 9;
+or 5 6;
+const 13;
+call 333;
+load 22;
+set;
+if 40;
+else;
+block 64;
+loop 64;
+end;
+br;
+br_if;
+ret;
+eq;
+nq;
+lt;
+le;
+gt;
+ge;
+|
