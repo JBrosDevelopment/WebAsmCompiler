@@ -2,7 +2,7 @@ const fs = require('fs');
 
 async function main() {
     const wasmBytes = fs.readFileSync('./program.wasm');
-    const outputFile = fs.createWriteStream('./output.wasm');
+    const outputFile = fs.createWriteStream('./bin/mainFunction.output.wasm');
 
     // This is for import functions to be exposed in WebAsm
     const imports = {
@@ -25,7 +25,7 @@ async function main() {
     const memory = instance.exports.memory;
     const bytes = new Uint8Array(memory.buffer);
     
-    const replaceBytes = fs.readFileSync('./input.cwa');
+    const replaceBytes = fs.readFileSync('./cwa/mainFunction.cwa');
 
     for (let i = 0; i < replaceBytes.length; i++) {
         bytes[i] = replaceBytes[i];
@@ -324,6 +324,9 @@ function createWasmFile() {
                     cmd('i32.const'), ...ULEB128(0xFB),
                     cmd('i32.eq'),
                     cmd('if'), 0x40, // if -> null
+                        cmd('local.get'), mainVars['startWord'],
+                        cmd('call'), functions['print_i32'],
+
                         cmd('i32.const'), ...ULEB128(0xFB),
                         cmd('call'), functions['print_i32'],
                         cmd('return'),
@@ -349,6 +352,9 @@ function createWasmFile() {
                         cmd('i32.const'), ...ULEB128(0xFC),
                         cmd('i32.eq'),
                         cmd('if'), 0x40, // if -> null
+                            cmd('local.get'), mainVars['startWord'],
+                            cmd('call'), functions['print_i32'],
+
                             cmd('i32.const'), ...ULEB128(0xFC),
                             cmd('call'), functions['print_i32'],
                             cmd('return'),
@@ -465,6 +471,7 @@ function createWasmFile() {
 
         cmd('end') // end
     ];
+
     const wordToCMDVars = { startWord: 0, wordLength: 1 };
     const b7_WordToCMD = [
         0, // = local variable declaration group count
@@ -1033,8 +1040,8 @@ function createWasmFile() {
         cmd('return'), 
         cmd('end'), // end [if]
 
-        /// ret ///////////////////////////////////////////////////////////////////
-        cmd('i32.const'), 3, // stackLength: 1
+        /// return ////////////////////////////////////////////////////////////////
+        cmd('i32.const'), 6, // stackLength: 1
         cmd('local.get'), wordToCMDVars['wordLength'], // stackLength: 2 
         cmd('i32.eq'), // stackLength: 1
         cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
@@ -1052,6 +1059,27 @@ function createWasmFile() {
         cmd('i32.const'), ...SLEB128('t'.charCodeAt(0)), // stackLength: 2
         cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
         cmd('i32.const'), 2, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('u'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 3, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('r'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 4, // stackLength: 4
+        cmd('i32.add'), // stackLength: 3
+        cmd('i32.load8_u'), 0, 0, // stackLength: 3
+        cmd('i32.eq'), // stackLength: 2
+        cmd('i32.and'), // stackLength: 1
+        cmd('i32.const'), ...SLEB128('n'.charCodeAt(0)), // stackLength: 2
+        cmd('local.get'), wordToCMDVars['startWord'], // stackLength: 3
+        cmd('i32.const'), 5, // stackLength: 4
         cmd('i32.add'), // stackLength: 3
         cmd('i32.load8_u'), 0, 0, // stackLength: 3
         cmd('i32.eq'), // stackLength: 2

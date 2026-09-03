@@ -147,18 +147,11 @@
 | `i32.trunc_f32_s` | `0xA8` | Converts f32 to signed i32 |
 | `i32.trunc_f64_s` | `0xAA` | Converts f64 to signed i32 |
 
-## Function Tables
+## Types:
 
-| Opcode | Hex | Description |
+| Type | Hex | Description |
 |---|---:|---|
-| `call_indirect` | `0x11` | Calls a function selected from a function table |
-
-## WASM GC Structs
-
-| Instruction | Description |
-|---|---|
-| `struct.new` | Creates a WASM GC struct from values on the stack |
-| `struct.get` | Reads a field from a WASM GC struct |
-| `struct.set` | Writes a field in a WASM GC struct |
-
-> Note: `struct.new`, `struct.get`, and `struct.set` are part of WebAssembly GC/reference-types functionality. They are different from the linear-memory struct approach using `i32.load` and `i32.store`.
+| `i32` | `0x7F` | 32-bit integer |
+| `i64` | `0x7E` | 64-bit integer |
+| `f32` | `0x7D` | 32-bit float |
+| `f64` | `0x7C` | 64-bit float |

@@ -8,16 +8,30 @@ I will update the README as I progress through the project. Treat this almost as
 
 # Contents
 
-- **[Setting up WebAsm](#setting-up-webasm)**
-  - **[First Program](#first-program)**
-  - **[Insert Data into Program](#insert-data-into-program)**
-- **[Assembler](#assembler)**
-  - **[First Step, Replacing Characters](#first-step-replacing-characters)**
-  - **[Second Step, Input is Text and Output is bytes](#second-step-input-is-text-and-output-is-bytes)
+- [Web Assembly Compiler](#web-assembly-compiler)
+- [Contents](#contents)
+- [Setting Up WebAsm](#setting-up-webasm)
+  - [First Program](#first-program)
+  - [Insert Data into Program](#insert-data-into-program)
+- [Assembler](#assembler)
+  - [First Step, Replacing Characters](#first-step-replacing-characters)
+  - [Second Step, Input is Text and Output is bytes](#second-step-input-is-text-and-output-is-bytes)
+  - [Third Step, Define the Assembly Language](#third-step-define-the-assembly-language)
+    - [Encoding Bytes](#encoding-bytes)
+    - [Comments](#comments)
+    - [Assembler Variables](#assembler-variables)
+    - [Defining Sections](#defining-sections)
+    - [TYPE Section](#type-section)
+    - [IMPORT Section](#import-section)
+    - [FUNCTION Section](#function-section)
+    - [MEMORY Section](#memory-section)
+    - [GLOBAL Section](#global-section)
+    - [EXPORT Section](#export-section)
+    - [CODE Section](#code-section)
 
-## Setting Up WebAsm
+# Setting Up WebAsm
 
-### First Program
+## First Program
 
 First thing I did was set up a javascript file that would load a `wasm` file and run it. I use [program.wasm](program.wasm) as the target. I also had to create a function to create the file and fill it with the binary data. With the help of ChatGPT to guide me, I was able to make a simple program that would run and I used node js for fast console output. 
 
@@ -83,7 +97,7 @@ function main() -> void {
 }
 ```
 
-### Insert Data into Program
+## Insert Data into Program
 
 Okay we're going to try to effect the output with some input from the javascript file. I will create a file named, input.cwa (custom web assembly), then I will read this file in javascript and convert it into binary and feed it into the webasm program. I will do this by exporting a memory page inside the program.wasm file. 
 
@@ -145,9 +159,9 @@ function main(byteLength: i32) -> void {
 
 The above code is coded really weird with the `block` and the `goto` statement, but that is closest way of writing this code in a more readable format. The way Web Assembly works, there is no exact loop that then loops back to the beginning. it does use an opcode named loop, but it is more of a block than a loop. It also has a branch `br` (`0x0C`) and a conditional branch `br_if` (`0x0D`), and these will return to a depth defined, or can also break if you return to a  surrounding block. But also if the code reaches the `end` of the loop it breaks instead of looping back. It's interesting the way it works but once you understand it it makes sense.
 
-## Assembler
+# Assembler
 
-### First Step, Replacing Characters
+## First Step, Replacing Characters
 
 So for the assembler, we're going to start with replacing characters from the input and then converting that into the opcode. Say `add` is `a` and such, if the character is not in the list it will just ignore it. This way we can start making the assembler and then later have this a little bit more usable assembler and integrate on top of it.
 
@@ -205,7 +219,7 @@ function main() -> void {
 }
 ```
 
-### Second Step, Input is Text and Output is bytes
+## Second Step, Input is Text and Output is bytes
 
 Okay so the next step is to make the Input a text file and the output bytes. Right now, it has no idea when a byte is an instruction and when a byte is a number or such. Unfortunately we can not use the program from the first step to work on this, because any number input will just be the byte value and not the ASCI code for the number.
 
@@ -419,3 +433,189 @@ add
 call 0 
 */
 ```
+
+Surprisingly, after a lot of work, it worked! This is not the end goal though. This assembler is extremely limited, and only really works with the CODE section of the WebAsm binary. Even though I worked so hard to get this one to work, I'm going to scrap it for now and start going over what I want the assembly language to look like.
+
+## Third Step, Define the Assembly Language
+
+The assembly language needs to have the following goals:
+- [x] Be extremely simple to map to binary
+- [x] Assemble all WebAsm sections, not just the CODE section
+  - This includes importing and exporting functions, defining memory, and defining functions
+- [ ] Be able to look at the assembly language and understand what the program is doing. This is especially true with the other Sections, when defining functions or memory
+  - This didn't really happen to work that well with the way the assembler was set up, so I might make this better in the future, but for now it will be a little more complex to read than I would like.
+- [x] Be relatively easy to program the assembler in the WebAsm binary
+- [x] Does not need to have complete mapping of WebAsm opcodes, just enough to be able to write a simple program
+
+Some of these goals are simple enough, others are more complex.
+
+### Encoding Bytes
+
+Right now, we want to be able to encode number and bytes in a bunch of different ways for simplicity. We'll use prefixes to define how the number or byte is encoded. The following are the prefixes that will be used:
+
+- `hex` - Hexadecimal, 2 bytes per digit, e.g. `hex FF` = 255
+- `bin` - Binary, 8 bytes per digit, e.g. `bin 11111111` = 255
+- `uleb` - Unsigned LEB128, e.g. `uleb 255` = 255
+- `str` - String, e.g. `str Hello` = 72 101 108 108 111
+  - Remember usually the length of strings is required before the string, so use `uleb 3 str abc` to encode the string "abc" with the length of 3 before it.
+
+### Comments
+
+I think comments would be a nice touch and not hard to add so the `;` will start a comment and will continue until the end of the line. The assembler will ignore everything after the `;` on that line.
+
+### Assembler Variables
+
+The `$` will be used to access a variable that can be used later in the program. The `#` will be used to define it. The variable will be replaced with the value of the variable when the assembler sees it. The following is an example of how to define and use a variable:
+
+```
+; define
+#<variable_name> <value>
+; access
+$<variable_name>
+```
+
+This can be anywhere in a line, for example `FUNCTION uleb 1 i32 #main_type 0` is valid and will replace `$main_type` with `0` when the assembler sees it in the future. In this line, `const $main_type` is the same as `const 0`.
+
+### Defining Sections
+
+To define a section, we will use the following syntax:
+
+```
+SECTION <section_name> 
+; contents
+END_SECTION
+```
+
+This will allow the assembler to start counting bytes when it sees the `SECTION` keyword, and stop counting when it sees the `END_SECTION` keyword. The section name will be a predefined that will convert to the binary section name. The following are the section names that will be used:
+
+- `SECTION_HEADER` - Header Section -> Converts to `0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00`
+- `SECTION_TYPE` - Type Section -> Converts to `0x01`
+- `SECTION_IMPORT` - Import Section -> Converts to `0x02`
+- `SECTION_FUNCTION` - Function Section -> Converts to `0x03`
+- `SECTION_MEMORY` - Memory Section -> Converts to `0x05`
+- `SECTION_GLOBAL` - Global Section -> Converts to `0x06`
+- `SECTION_EXPORT` - Export Section -> Converts to `0x07`
+- `SECTION_CODE` - Code Section -> Converts to `0x0A`
+
+More might come later but these are the main sections we'll use for now.
+
+### TYPE Section
+
+The Type Section will translate directly into bytes, but it will be easier to read and write than just straight bytes because terms like `FUNCTION` -> `0x60` and `i32` -> `0x7F` will be used. The following is an example of how to define a function type in the TYPE section:
+
+```
+SECTION SECTION_TYPE
+FUNCTION uleb 3 i32 i32 i32 uleb 1 i32 #three_in_1_out 0
+FUNCTION uleb 1 i32 uleb 0 #print_i32_type 1
+SECTION_END
+```
+
+The `uleb 3 i32 i32 i32` are the parameters of the function, and the `i32` is the return type of the function.
+
+The `$three_in_1_out` and `$print_i32_type` are the labels that can be used to reference this type later. If `$three_in_1_out` is used later in the program, it will be replaced with the index -> `0` because it's the first type defined.
+
+### IMPORT Section
+
+The Import sections will also directly translate into bytes. These use strings so the `str` encoding will be used for the module and function names. The following is an example of how to define an import in the IMPORT section:
+
+```
+SECTION SECTION_IMPORT
+uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
+SECTION_END
+```
+
+`FUNCTION_KIND` is a predefined that will convert to `0x00` for the import kind. The `$print_i32_type` is the label that was defined in the TYPE section, and it will be replaced with the index of the type when the assembler sees it.
+
+### FUNCTION Section
+
+The Function section is pretty simple, it just defines the functions that will be used in the CODE section.
+
+```
+SECTION SECTION_FUNCTION
+#main 0 $main_type
+#other_func 1 $three_in_1_out
+SECTION_END
+```
+
+The `#main` and `#other_func` are labels defined in the TYPE_SECTION and they translate to the index of the type that corrosponds to the function. The `$main_type` and `$three_in_1_out` are the labels that were defined in the TYPE section, and they will be replaced with the index of the type when the assembler sees them.
+
+### MEMORY Section
+
+The memory section won't be used much in the beginning, so for now I will just keep it simple and it translates directly into bytes. The following is an example of how to define a memory in the MEMORY section:
+
+```
+SECTION SECTION_MEMORY
+; 1 page of memory, no max, min size 1 page. Define variable for memory index 0
+uleb 1 uleb 0 uleb 1 #memory 0
+SECTION_END
+```
+
+### GLOBAL Section
+
+The global section is for defining global variables that can be used in the program. The following is an example of how to define a global variable in the GLOBAL section:
+
+```
+SECTION SECTION_GLOBAL
+uleb 1
+i32 IMMUTABLE const uleb 45 end #global_var 0
+SECTION_END
+```
+
+### EXPORT Section
+
+The export section is also pretty simple, it just defines the functions that will be exported from the program. The following is an example of how to define an export in the EXPORT section:
+
+```
+SECTION SECTION_EXPORT
+uleb 2 
+uleb 4 str main FUNCTION_KIND $main
+uleb 6 str memory MEMORY_KIND $memory
+SECTION_END
+```
+
+### CODE Section
+
+The CODE section is where the main program code will be defined. This is where the bulk of the assembly language will be used. Every opcode that will be supported will have a defined keyword that will translate to the opcode. `FUNCTION_START` and `FUNCTION_END` will be used to track how many bytes are in the function declaration.. The following is an example of how to define a function in the CODE section:
+
+```
+SECTION SECTION_CODE
+uleb 2
+
+FUNCTION_START ; main function
+    const uleb 6
+    const uleb 7
+    add
+    call $print_i32
+    end
+FUNCTION_END
+
+FUNCTION_START ; other_func function
+    uleb 1 ; declaration group
+    uleb 3 i32 #x 0 #y 0 #z 0 ; local variables
+    
+    block NO_RETURN %block1
+        loop NO_RETURN %loop1
+            local.get $x
+            local.get $y
+            i32.mul
+            local.get $z
+            i32.mul
+            local.set $x
+            
+            local.get $x
+            i32.const uleb 500
+            i32.lt
+            br_if ^block1
+        end
+    end
+    local.get $x
+    return
+    end
+FUNCTION_END
+
+SECTION_END
+```
+
+You can view the opcodes for the above code in the [Opcodes.md](Opcodes.md) file.
+
+The `%` and the `^` are used to define and reference labels for the `block`, `loop`, and `br_if` opcodes. The `%block1` and `%loop1` are labels that can be used to reference the block and loop, and the `^block1` is used to reference the block when using the `br_if` opcode. This is to make it easier to use brances in the language instead of counting the depth.

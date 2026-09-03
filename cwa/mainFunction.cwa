@@ -1,0 +1,164 @@
+const 1;
+set 6;
+
+block 64;
+    loop 64;
+    get 0;
+    load 0 0;
+    set 1;
+
+    get 0;
+    const 1;
+    add;
+    set 0;
+
+    get 1;
+    const 254;
+    eq;
+    get 1;
+    const 124;
+    eq;
+    or;
+    br_if 1;
+
+    get 1;
+    const 10;
+    eq;
+    get 1;
+    const 13;
+    eq;
+    or;
+    if 64;
+        const 1;
+        set 6;
+
+        get 0;
+        set 4;
+
+
+        br 1;
+    end;
+
+    get 1;
+    const 32;
+    eq;
+    get 1;
+    const 9;
+    eq;
+    or;
+    get 1;
+    const 59;
+    eq;
+    or;
+    if 64;
+
+        get 6;
+        const 2;
+        eq;
+        if 64;
+   
+            const 0;
+            set 6;
+
+   
+            get 4;
+            get 5;
+            call 3;
+            set 2;
+   
+
+   
+            get 2;
+            call 1;
+        else;
+   
+            get 6;
+            const 0;
+            eq;
+            if 64;
+       
+                get 4;
+                get 5;
+                call 4;
+                set 3;
+
+       
+                get 3;
+                call 6;
+            end;
+        end;
+
+
+        get 0;
+        set 4;
+
+
+        const 0;
+        set 5;
+
+
+        br 1;
+    end;
+
+    get 1;
+    const 97;
+    ge;
+    get 1;
+    const 122;
+    le;
+    and;
+    get 1;
+    const 65;
+    ge;
+    get 1;
+    const 90;
+    le;
+    and;
+    get 1;
+    const 48;
+    ge;
+    get 1;
+    const 57;
+    le;
+    and;
+    get 1;
+    const 95;
+    eq;
+    or;
+    or;
+    or;
+    if 64;
+
+        get 6;
+        const 1;
+        eq;
+        if 64;
+            const 2;
+            set 6;
+        end;
+
+
+        get 5;
+        const 1;
+        add;
+        set 5;
+    else;
+
+        get 1;
+        call 0;
+        const 253;
+        call 0;
+
+        return;
+    end;
+
+    br 0;
+
+    end;
+end;
+
+
+get 0;
+call 0;
+
+end;

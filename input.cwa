@@ -14,7 +14,7 @@ loop 64;
 end;
 br;
 br_if;
-ret;
+return;
 eq;
 nq;
 lt;
