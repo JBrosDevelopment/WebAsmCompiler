@@ -64,7 +64,36 @@ def write_char(char): # import
 
 def exit_program(errCode): # import
     exit(errCode)
-    
+
+sectionMemory = []
+
+BYTES_OUT = 0 # global
+LAST_BYTES_OUT = 0 # global
+
+
+def writeSectionChar(char: int) -> None:
+    sectionMemory[BYTES_OUT] = char
+    BYTES_OUT = BYTES_OUT + 1 
+
+def writeSection(type: int, length: int, start: int) -> None:
+    # write type
+    write_char(type)
+
+    # write length
+    byte = 0
+    while number > 0:
+        byte = number & 0x7F
+        if number > 128:
+            byte |= 0x80
+        write_char(byte)
+        number = number >> 7
+
+    # write section data
+    index = start
+    while start + length > index:
+        write_char(sectionMemory[index])
+        index = index + 1
+
 def isWhiteSpace(index: int) -> int:
     return memory[index] == ' '.encode()[0] or memory[index] == '\t'.encode()[0]
 
@@ -86,10 +115,16 @@ def skipComment(index: int) -> int:
     return index
 
 def equals3(index: int, c1: int, c2: int, c3: int) -> int:
-    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and isWhiteSpace(index)
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and isWhiteSpace(index + 3)
 
 def equals4(index: int, c1: int, c2: int, c3: int, c4: int) -> int:
-    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == ' '.encode()[0]
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and isWhiteSpace(index + 4)
+
+def equals7(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and isWhiteSpace(index + 7)
+
+def equals11(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and isWhiteSpace(index + 11)
 
 def error(value):
     print_char('E')
@@ -99,6 +134,16 @@ def error(value):
     print_i32(value)    
     print_char(']')
     exit_program(value)
+
+def writeByte(number: int):
+    byte = 0
+
+    while number > 0:
+        byte = number & 0x7F
+        if number > 128:
+            byte |= 0x80
+        writeSectionChar(byte)
+        number = number >> 7
 
 def writeFromHex(index: int) -> int:
     result = 0
@@ -152,59 +197,36 @@ def writeFromBin(index: int) -> int:
 
 def writeFromString(index: int) -> int:
     while True:
-        write_char(memory[index])
+        writeSectionChar(memory[index])
 
         index = index + 1
         if isWhiteSpace(index):
             break
     return index
 
-def writeByte(number: int):
-    byte = 0
-
-    while number > 0:
-        byte = number & 0x7F
-        if number > 128:
-            byte |= 0x80
-        write_char(byte)
-        number = number >> 7
-
-def writeFromEncoding(index: int) -> int:
+def parseWord(index: int) -> int:
     if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
         index = skipWhiteSpace(index)
         return writeFromHex(index)
-    elif equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
+    if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
         index = skipWhiteSpace(index)
         return writeFromBin(index)
-    elif equals3(index, 's'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
+    if equals3(index, 's'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
         index = skipWhiteSpace(index)
         return writeFromString(index)
-    elif equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
+    if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
         index = skipWhiteSpace(index)
-        return writeFromString(index)
-    else:
-        error(0x03)
+        return writeByte(index)
+    if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0])
+        index = skipWhiteSpace(index)
+        LAST_BYTES_OUT = BYTES_OUT
+        return parseSection(index)
+    if equals11(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0])
+
+
+    error(0x04)
 
 def main():
     pass
 
 main()
-
-
-print_i32(3)
-print_char(3)
-write_char(3)
-isWhiteSpace(3)
-skipWhiteSpace(3)
-isComment(3)
-skipComment(3)
-equals3(3, 3, 3, 3)
-equals4(3, 3, 3, 3, 3)
-writeFromHex(3)
-writeFromBin(3)
-writeFromString(3)
-writeByte(3)
-writeFromEncoding(3)
-main()
-error(3)
-exit_program(3)
