@@ -994,7 +994,7 @@ function createWasmFile() {
         cmd('i32.eq'), // stackLength: 2
         cmd('i32.and'), // stackLength: 1
         cmd('if'), 0x40, // if -> void
-        cmd('i32.const'), ...SLEB128(0xC4), // opcode for `br`
+        cmd('i32.const'), ...SLEB128(0x0C), // opcode for `br`
         cmd('return'), 
         cmd('end'), // end [if]
 

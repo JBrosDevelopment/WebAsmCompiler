@@ -465,7 +465,7 @@ I think comments would be a nice touch and not hard to add so the `;` will start
 
 ### Assembler Variables
 
-The `$` will be used to access a variable that can be used later in the program. The `#` will be used to define it. The variable will be replaced with the value of the variable when the assembler sees it. The following is an example of how to define and use a variable:
+The `$` will be used to access a variable that can be used later in the program. The `#` will be used to define it. The variable will be replaced with the value of the variable when the assembler sees it. The value is required to be in integer format. The following is an example of how to define and use a variable:
 
 ```
 ; define

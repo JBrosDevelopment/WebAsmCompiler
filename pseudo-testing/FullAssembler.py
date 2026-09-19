@@ -1,4 +1,4 @@
-memory = list("""
+input_code = list("""
 SECTION_HEADER
 
 SECTION SECTION_TYPE
@@ -19,23 +19,19 @@ uleb 1
 uleb 4 str main FUNCTION_KIND $main
 SECTION_END
 
-SECTION SECTION_CODE
-uleb 1
+""")#SECTION SECTION_CODE
+#uleb 1
+#
+#FUNCTION_START ; main function
+#    const uleb 6
+#    const uleb 7
+#    add
+#    call $print_i32
+#    end
+#FUNCTION_END
+#""")
 
-FUNCTION_START ; main function
-    const uleb 6
-    const uleb 7
-    add
-    call $print_i32
-    end
-FUNCTION_END
-
-SECTION_END
-
-""" + str(0xFE))
-
-for i in range(len(memory)):
-    memory[i] = memory[i].encode()[0]
+#SECTION_END
 
 # pseudo code more indepth:
 #
@@ -66,15 +62,33 @@ def write_char(char): # import
     print('write: `', char, '`')
 
 def exit_program(errCode): # import
-    global BYTES_OUT
     print('memory dump: ', sectionMemory)
     exit(errCode)
+
+memory = list([0] * 1024)
+
+for i in range(len(input_code)):
+    memory[i] = input_code[i].encode()[0]
 
 sectionMemory = list([0] * 1024) # global
 
 BYTES_OUT = 0 # global
 LAST_BYTES_OUT = 0 # global
+LAST_VARIABLE_ID = 0 # global
 
+variable_names = list([0] * 1024) # global
+variable_names_stack_index: int = 0 # global
+# variable names formatted like this:
+# ID STR_LENGTH STRING
+# example:
+# 3, 5, 'H', 'e', 'l', 'l', 'o'
+
+variable_values = list([0] * 1024) # global
+variable_values_stack_index: int = 0 # global
+# variable values formatted like this:
+# ID VALUE
+# example:
+# 3, 72
 
 def writeSectionChar(char: int) -> None:
     global BYTES_OUT
@@ -82,23 +96,31 @@ def writeSectionChar(char: int) -> None:
     BYTES_OUT = BYTES_OUT + 1 
 
 def writeSection(type: int, length: int, start: int) -> None:
-    # write type
     write_char(type)
 
-    # write length
+    section_length = length
+
+    # write length as ULEB128
     byte = 0
+
+    if length == 0:
+        write_char(0)
+
     while length > 0:
         byte = length & 0x7F
-        if length > 128:
+
+        if length >= 128:
             byte |= 0x80
+
         write_char(byte)
         length = length >> 7
 
     # write section data
     index = start
-    while start + length > index:
+
+    while index < start + section_length:
         write_char(sectionMemory[index])
-        index = index + 1
+        index += 1
 
 def isWhiteSpace(index: int) -> int:
     return memory[index] == ' '.encode()[0] or memory[index] == '\t'.encode()[0] or memory[index] == '\n'.encode()[0]
@@ -129,11 +151,23 @@ def equals4(index: int, c1: int, c2: int, c3: int, c4: int) -> int:
 def equals7(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and isWhiteSpace(index + 7)
 
+def equals8(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and isWhiteSpace(index + 8)
+
 def equals11(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and isWhiteSpace(index + 11)
 
+def equals12(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and isWhiteSpace(index + 12)
+
+def equals13(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and isWhiteSpace(index + 13)
+
 def equals14(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and isWhiteSpace(index + 14)
+
+def equals16(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int, c15: int, c16: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and memory[index + 14] == c15 and memory[index + 15] == c16 and isWhiteSpace(index + 16)
 
 def error(value):
     print_char('E')
@@ -159,6 +193,7 @@ def writeByte(number: int):
         number = number >> 7
 
 def writeFromHex(index: int) -> int:
+    index = skipWhiteSpace(index)
     result = 0
     val = 0
     char = 0
@@ -186,6 +221,7 @@ def writeFromHex(index: int) -> int:
     return index
 
 def writeFromBin(index: int) -> int:
+    index = skipWhiteSpace(index)
     result = 0
     val = 0
     char = 0
@@ -209,6 +245,7 @@ def writeFromBin(index: int) -> int:
     return index
 
 def writeFromString(index: int) -> int:
+    index = skipWhiteSpace(index)
     while True:
         writeSectionChar(memory[index])
 
@@ -217,18 +254,151 @@ def writeFromString(index: int) -> int:
             break
     return index
 
+def writeFromUleb(index: int) -> int:
+    index = skipWhiteSpace(index)
+    result = 0
+    digit = 0
+
+    while True:
+        digit = memory[index] - '0'.encode()[0]
+        result = result * 10 + digit
+
+        index += 1
+        if isWhiteSpace(index):
+            break
+
+    writeByte(result)
+    return index
+
+def setVariable(index: int) -> int:
+    global LAST_VARIABLE_ID
+    global variable_names_stack_index
+    global variable_values_stack_index
+
+    variable_name_start = index
+    variable_name_length = 0
+    loop_index = 0
+    result = 0
+
+    # Get variable name
+    while True:
+        variable_name_length += 1
+        index += 1
+
+        if isWhiteSpace(index):
+            break
+
+    index = skipWhiteSpace(index)
+
+    # Get value
+    while True:
+        digit = memory[index] - ord('0')
+        result = result * 10 + digit
+        index += 1
+
+        if isWhiteSpace(index):
+            break
+
+    # Store variable name:
+    variable_names[variable_names_stack_index] = LAST_VARIABLE_ID
+    variable_names_stack_index += 1
+
+    variable_names[variable_names_stack_index] = variable_name_length
+    variable_names_stack_index += 1
+
+    while loop_index < variable_name_length:
+        variable_names[variable_names_stack_index] = memory[variable_name_start + loop_index]
+
+        variable_names_stack_index += 1
+        loop_index += 1
+
+    # Store variable value:
+    variable_values[variable_values_stack_index] = LAST_VARIABLE_ID
+    variable_values_stack_index += 1
+
+    variable_values[variable_values_stack_index] = result
+    variable_values_stack_index += 1
+
+    LAST_VARIABLE_ID += 1
+
+    return index
+
+def getVariable(index: int) -> int:
+    variable_name_start = index
+    variable_name_length = 0
+    vname_pointer = 0
+    variable_id = 0
+    matches = 0
+    stored_name_length = 0
+
+    # Get variable name
+    while True:
+        variable_name_length += 1
+        index += 1
+
+        if isWhiteSpace(index):
+            break
+
+    # Search variable_names
+
+    while vname_pointer < variable_names_stack_index:
+        variable_id = variable_names[vname_pointer]
+        vname_pointer += 1
+
+        stored_name_length = variable_names[vname_pointer]
+        vname_pointer += 1
+
+        matches = 1
+
+        # Lengths must match first
+        if stored_name_length != variable_name_length:
+            matches = 0
+
+        # Compare characters
+        loop_index = 0
+        while loop_index < stored_name_length:
+
+            if matches == 1:
+                if memory[variable_name_start + loop_index] != variable_names[vname_pointer + loop_index]:
+                    matches = 0
+
+            loop_index += 1
+
+        if matches == 1:
+            # Search [ID, value] pairs
+            value_pointer = 0
+            while value_pointer < variable_values_stack_index:
+                if variable_values[value_pointer] == variable_id:
+                    value = variable_values[value_pointer + 1]
+
+                    # Assuming LAST_BYTES_OUT represents the
+                    # value that your assembler should output.
+                    writeByte(value)
+                    return index
+
+                value_pointer += 2
+
+        vname_pointer += stored_name_length
+
+    error(0x03)
+
+def parseCmd(index: int) -> int:
+    pass
+
 def parseWord(index: int) -> int:
     global LAST_BYTES_OUT
     global BYTES_OUT
     if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
-        return writeFromHex(index)
+        return writeFromHex(index + 3)
     if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
-        return writeFromBin(index)
+        return writeFromBin(index + 3)
     if equals3(index, 's'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
-        writeByte(memory[index])
-        return index + 1
+        return writeFromString(index + 3)
+    if equals3(index, 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+        writeByte(0x7F)
+        return index + 3
     if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
-        return writeByte(index)
+        return writeFromUleb(index + 4)
     if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
         LAST_BYTES_OUT = BYTES_OUT
         return index + 7
@@ -245,22 +415,56 @@ def parseWord(index: int) -> int:
         writeByte(0x00)
         writeByte(0x00)
         return index + 14
-        
+    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'T'.encode()[0], 'Y'.encode()[0], 'P'.encode()[0], 'E'.encode()[0]):
+        writeByte(0x01)
+        return index + 12
+    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'I'.encode()[0], 'M'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+        writeByte(0x02)
+        return index + 14
+    if equals16(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
+        writeByte(0x03)
+        return index + 16
+    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'M'.encode()[0], 'E'.encode()[0], 'M'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'Y'.encode()[0]):
+        writeByte(0x05)
+        return index + 14
+    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'G'.encode()[0], 'L'.encode()[0], 'O'.encode()[0], 'B'.encode()[0], 'A'.encode()[0], 'L'.encode()[0]):
+        writeByte(0x06)
+        return index + 14
+    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'X'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+        writeByte(0x07)
+        return index + 14
+    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'C'.encode()[0], 'O'.encode()[0], 'D'.encode()[0], 'E'.encode()[0]):
+        writeByte(0x0A)
+        return index + 12
+    if equals8(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
+        writeByte(0x60)
+        return index + 8
+    if equals13(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+        writeByte(0x00)
+        return index + 13
+    if isComment(index):
+        return skipComment(index)
+    if memory[index] == '#'.encode()[0]:
+        return setVariable(index + 1)
+    if memory[index] == '$'.encode()[0]:
+        return getVariable(index + 1)
+    if parseCmd(index):
+        return index
+    if memory[index] == 0:
+        return -67
 
     error(0x04)
 
 def main():
-    pass
+    index = 0
+    while True:
+        index = skipWhiteSpace(index)
+        index = parseWord(index)
+
+        if index >= len(memory) or index == -67:
+            break
+
+    if LAST_BYTES_OUT != BYTES_OUT:
+        writeSection(0x00, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
 
 main()
-
-index = 0
-while True:
-    index = skipWhiteSpace(index)
-    index = parseWord(index)
-
-    if index >= len(memory):
-        break
-
-if LAST_BYTES_OUT != BYTES_OUT:
-    writeSection(0x00, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
