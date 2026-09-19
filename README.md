@@ -582,16 +582,17 @@ SECTION SECTION_CODE
 uleb 2
 
 FUNCTION_START ; main function
-    const uleb 6
-    const uleb 7
-    add
+    uleb 0 ; declaration group
+    i32.const uleb 6
+    i32.const uleb 7
+    i32.add
     call $print_i32
     end
 FUNCTION_END
 
 FUNCTION_START ; other_func function
     uleb 1 ; declaration group
-    uleb 3 i32 #x 0 #y 0 #z 0 ; local variables
+    uleb 3 i32 #x 0 #y 1 #z 2 ; local variables
     
     block NO_RETURN %block1
         loop NO_RETURN %loop1

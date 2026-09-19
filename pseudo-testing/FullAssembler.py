@@ -1,7 +1,7 @@
 input_code = list("""
 SECTION_HEADER
 
-SECTION SECTION_TYPE
+SECTION SECTION_TYPE ; 1
 FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0 ; func(i32) -> void
 FUNCTION uleb 0 uleb 0 #main_type 1 ; func() -> void
 SECTION_END
@@ -19,17 +19,17 @@ uleb 1
 uleb 4 str main FUNCTION_KIND $main
 SECTION_END
 
-""")#SECTION SECTION_CODE
-#uleb 1
-#
-#FUNCTION_START ; main function
-#    const uleb 6
-#    const uleb 7
-#    add
-#    call $print_i32
-#    end
-#FUNCTION_END
-#""")
+SECTION SECTION_CODE
+uleb 1
+
+FUNCTION_START ; main function
+    i32.const uleb 6
+    i32.const uleb 7
+    i32.add
+    call $print_i32
+    end
+FUNCTION_END
+""")
 
 #SECTION_END
 
@@ -62,7 +62,7 @@ def write_char(char): # import
     print('write: `', char, '`')
 
 def exit_program(errCode): # import
-    print('memory dump: ', sectionMemory)
+    print('section memory dump: ', sectionMemory)
     exit(errCode)
 
 memory = list([0] * 1024)
@@ -75,6 +75,7 @@ sectionMemory = list([0] * 1024) # global
 BYTES_OUT = 0 # global
 LAST_BYTES_OUT = 0 # global
 LAST_VARIABLE_ID = 0 # global
+CURRENT_SECTION: int = 0 # global
 
 variable_names = list([0] * 1024) # global
 variable_names_stack_index: int = 0 # global
@@ -142,17 +143,32 @@ def skipComment(index: int) -> int:
         index = index + 1
     return index
 
+def equals2(index: int, c1: int, c2: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and isWhiteSpace(index + 2)
+
 def equals3(index: int, c1: int, c2: int, c3: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and isWhiteSpace(index + 3)
 
 def equals4(index: int, c1: int, c2: int, c3: int, c4: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and isWhiteSpace(index + 4)
 
+def equals5(index: int, c1: int, c2: int, c3: int, c4: int, c5: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and isWhiteSpace(index + 5)
+
+def equals6(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and isWhiteSpace(index + 6)
+
 def equals7(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and isWhiteSpace(index + 7)
 
 def equals8(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and isWhiteSpace(index + 8)
+
+def equals9(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and isWhiteSpace(index + 9)
+
+def equals10(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and isWhiteSpace(index + 10)
 
 def equals11(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and isWhiteSpace(index + 11)
@@ -383,11 +399,259 @@ def getVariable(index: int) -> int:
     error(0x03)
 
 def parseCmd(index: int) -> int:
-    pass
+    i32_arithmatic = 0x6A
+    i32_comparison = 0x45
+    i64_arithmatic = 0x7C
+    i64_comparison = 0x50
+    f32_arithmatic = 0x8B
+    f32_comparison = 0x5B
+    f64_arithmatic = 0x99
+    f64_comparison = 0x61
+    type_arithmatic = 0
+    type_comparison = 0
+    type = 10
+    if equals4(index, 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '.'.encode()[0]):
+        type = 0x00
+        type_arithmatic = i32_arithmatic
+        type_comparison = i32_comparison
+    if equals4(index, 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '.'.encode()[0]):
+        type = 0x01
+        type_arithmatic = i64_arithmatic
+        type_comparison = i64_comparison
+    if equals4(index, 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '.'.encode()[0]):
+        type = 0x02
+        type_arithmatic = f32_arithmatic
+        type_comparison = f32_comparison
+    if equals4(index, 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '.'.encode()[0]):
+        type = 0x03
+        type_arithmatic = f64_arithmatic
+        type_comparison = f64_comparison
+
+    # control flow
+    if equals5(index, 'b'.encode()[0], 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'k'.encode()[0]):
+        writeByte(0x02)
+        return index + 5
+    if equals4(index, 'l'.encode()[0], 'o'.encode()[0], 'o'.encode()[0], 'p'.encode()[0]):
+        writeByte(0x03)
+        return index + 4
+    if equals2(index, 'i'.encode()[0], 'f'.encode()[0]):
+        writeByte(0x04)
+        return index + 2
+    if equals4(index, 'e'.encode()[0], 'l'.encode()[0], 's'.encode()[0], 'e'.encode()[0]):
+        writeByte(0x05)
+        return index + 4
+    if equals3(index, 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
+        writeByte(0x0B)
+        return index + 3
+    if equals2(index, 'b'.encode()[0], 'r'.encode()[0]):
+        writeByte(0x0C)
+        return index + 2
+    if equals5(index, 'b'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], 'f'.encode()[0]):
+        writeByte(0x0D)
+        return index + 5
+    if equals6(index, 'r'.encode()[0], 'e'.encode()[0], 't'.encode()[0], 'u'.encode()[0], 'r'.encode()[0], 'n'.encode()[0]):
+        writeByte(0x0F)
+        return index + 6
+    # functions
+    if equals4(index, 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], 'l'.encode()[0]):
+        writeByte(0x10)
+        return index + 4
+    if equals13(index, 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], 'l'.encode()[0], '_'.encode()[0], 'i'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], 'i'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], 'c'.encode()[0], 't'.encode()[0]):
+        writeByte(0x11)
+        return index + 13
+    # stack
+    if equals4(index, 'd'.encode()[0], 'r'.encode()[0], 'o'.encode()[0], 'p'.encode()[0]):
+        writeByte(0x1A)
+        return index + 4
+    # locals
+    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 'g'.encode()[0], 'e'.encode()[0], 't'.encode()[0]):
+        writeByte(0x20)
+        return index + 9
+    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 's'.encode()[0], 'e'.encode()[0], 't'.encode()[0]):
+        writeByte(0x21)
+        return index + 9
+    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 'e'.encode()[0], 'e'.encode()[0], 'e'.encode()[0]):
+        writeByte(0x22)
+        return index + 9
+    # type specific instructions
+    if type != 10: 
+        index += 4
+        # constants
+        if equals5(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 's'.encode()[0], 't'.encode()[0]):
+            writeByte(0x41 + type)
+            return index + 5
+        #arithmetic
+        if equals3(index, 'a'.encode()[0], 'd'.encode()[0], 'd'.encode()[0]):
+            writeByte(type_arithmatic + 0)
+            return index + 3
+        if equals3(index, 's'.encode()[0], 'u'.encode()[0], 'b'.encode()[0]):
+            writeByte(type_arithmatic + 1)
+            return index + 3
+        if equals3(index, 'm'.encode()[0], 'u'.encode()[0], 'l'.encode()[0]):
+            writeByte(type_arithmatic + 2)
+            return index + 3
+        if equals5('d'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_arithmatic + 3)
+            return index + 5
+        if equals5('d'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_arithmatic + 4)
+            return index + 5
+        if equals5('r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_arithmatic + 5)
+            return index + 5
+        if equals5('r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_arithmatic + 6)
+            return index + 5
+        if equals3(index, 'a'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
+            writeByte(type_arithmatic + 7)
+            return index + 3
+        if equals2(index, 'o'.encode()[0], 'r'.encode()[0]):
+            writeByte(type_arithmatic + 8)
+            return index + 2
+        if equals3(index, 'x'.encode()[0], 'o'.encode()[0], 'r'.encode()[0]):
+            writeByte(type_arithmatic + 9)
+            return index + 3
+        if equals3(index, 's'.encode()[0], 'h'.encode()[0], 'l'.encode()[0]):
+            writeByte(type_arithmatic + 10)
+            return index + 3
+        if equals5(index, 's'.encode()[0], 'h'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_arithmatic + 11)
+            return index + 5
+        if equals5(index, 's'.encode()[0], 'h'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_arithmatic + 12)
+            return index + 5
+        if equals4(index, 'r'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'l'.encode()[0]):
+            writeByte(type_arithmatic + 13)
+            return index + 4
+        if equals4(index, 'r'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
+            writeByte(type_arithmatic + 14)
+            return index + 4
+        # comparisons
+        if equals3(index, 'e'.encode()[0], 'q'.encode()[0], 'z'.encode()[0]):
+            writeByte(type_comparison + 0)
+            return index + 3
+        if equals2(index, 'e'.encode()[0], 'q'.encode()[0]):
+            writeByte(type_comparison + 1)
+            return index + 2
+        if equals2(index, 'n'.encode()[0], 'e'.encode()[0]):
+            writeByte(type_comparison + 2)
+            return index + 2
+        if equals4(index, 'l'.encode()[0], 't'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_comparison + 3)
+            return index + 4
+        if equals4(index, 'l'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_comparison + 4)
+            return index + 4
+        if equals4(index, 'g'.encode()[0], 't'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_comparison + 5)
+            return index + 4
+        if equals4(index, 'g'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_comparison + 6)
+            return index + 4
+        if equals4(index, 'l'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_comparison + 7)
+            return index + 4
+        if equals4(index, 'l'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_comparison + 8)
+            return index + 4
+        if equals4(index, 'g'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            writeByte(type_comparison + 9)
+            return index + 4
+        if equals4(index, 'g'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            writeByte(type_comparison + 10)
+            return index + 4
+        # memory loads
+        if equals4(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0]):
+            writeByte(0x28 + type)
+            return index + 4
+        if type == 0 or type == 1:
+            if equals7(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '8'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0x2C + type*4)
+                return index + 7
+            if equals7(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '8'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0x2D + type*4)
+                return index + 7
+            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '1'.encode()[0], '6'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0x2E + type*4)
+                return index + 8
+            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '1'.encode()[0], '6'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0x2F + type*4)
+                return index + 8
+        if type == 1:
+            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0x34)
+                return index + 8
+            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0x35)
+                return index + 8
+        # memory stores
+        if equals5(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0]):
+            writeByte(0x36 + type)
+            return index + 5
+        if type == 0 or type == 1:
+            if equals6(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '8'.encode()[0]):
+                writeByte(0x3A + type*2)
+                return index + 6
+            if equals7(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '1'.encode()[0], '6'.encode()[0]):
+                writeByte(0x3B + type*2)
+                return index + 7
+        if type == 1:
+            if equals7(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+                writeByte(0x3E)
+                return index + 7
+        # conversions
+        if type == 0:
+            if equals8(index, 'w'.encode()[0], 'r'.encode()[0], 'a'.encode()[0], 'p'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0]):
+                writeByte(0xA7)
+                return index + 8
+        if type == 1:
+            if equals12(index, 'e'.encode()[0], 'x'.encode()[0], 't'.encode()[0], 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0xAC)
+                return index + 12
+            if equals12(index, 'e'.encode()[0], 'x'.encode()[0], 't'.encode()[0], 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0xAD)
+                return index + 12
+        if type == 2:
+            if equals10(index, 'd'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0]):
+                writeByte(0xB6)
+                return index + 10
+        if type == 3:
+            if equals11(index, 'p'.encode()[0], 'r'.encode()[0], 'o'.encode()[0], 'm'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+                writeByte(0xBB)
+                return index + 11
+        if type == 0 or type == 1:
+            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0xA8 + type * 6)
+                return index + 9
+            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0xA9 + type * 6)
+                return index + 9
+            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0xAA + type * 6)
+                return index + 9
+            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0xAB + type * 6)
+                return index + 9
+        if type == 2 or type == 3:
+            if equals12(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0xB2 + (type - 2) * 5)
+                return index + 12
+            if equals12(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0xB3 + (type - 2) * 5)
+                return index + 12
+            if equals12(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+                writeByte(0xB4 + (type - 2) * 5)
+                return index + 12
+            if equals12(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+                writeByte(0xB5 + (type - 2) * 5)
+                return index + 12
+            
+    return index 
 
 def parseWord(index: int) -> int:
     global LAST_BYTES_OUT
     global BYTES_OUT
+    global CURRENT_SECTION
     if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
         return writeFromHex(index + 3)
     if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
@@ -403,38 +667,38 @@ def parseWord(index: int) -> int:
         LAST_BYTES_OUT = BYTES_OUT
         return index + 7
     if equals11(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
-        writeSection(0x00, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
+        writeSection(CURRENT_SECTION, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
         return index + 11
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'H'.encode()[0], 'E'.encode()[0], 'A'.encode()[0], 'D'.encode()[0], 'E'.encode()[0], 'R'.encode()[0]):
-        writeByte(0x00)
-        writeByte(0x61)
-        writeByte(0x73)
-        writeByte(0x6D)
-        writeByte(0x01)
-        writeByte(0x00)
-        writeByte(0x00)
-        writeByte(0x00)
+        write_char(0x00)
+        write_char(0x61)
+        write_char(0x73)
+        write_char(0x6D)
+        write_char(0x01)
+        write_char(0x00)
+        write_char(0x00)
+        write_char(0x00)
         return index + 14
     if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'T'.encode()[0], 'Y'.encode()[0], 'P'.encode()[0], 'E'.encode()[0]):
-        writeByte(0x01)
+        CURRENT_SECTION = 0x01
         return index + 12
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'I'.encode()[0], 'M'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
-        writeByte(0x02)
+        CURRENT_SECTION = 0x02
         return index + 14
     if equals16(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
-        writeByte(0x03)
+        CURRENT_SECTION = 0x03
         return index + 16
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'M'.encode()[0], 'E'.encode()[0], 'M'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'Y'.encode()[0]):
-        writeByte(0x05)
+        CURRENT_SECTION = 0x05
         return index + 14
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'G'.encode()[0], 'L'.encode()[0], 'O'.encode()[0], 'B'.encode()[0], 'A'.encode()[0], 'L'.encode()[0]):
-        writeByte(0x06)
+        CURRENT_SECTION = 0x06
         return index + 14
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'X'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
-        writeByte(0x07)
+        CURRENT_SECTION = 0x07
         return index + 14
     if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'C'.encode()[0], 'O'.encode()[0], 'D'.encode()[0], 'E'.encode()[0]):
-        writeByte(0x0A)
+        CURRENT_SECTION = 0x0A
         return index + 12
     if equals8(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
         writeByte(0x60)
@@ -463,8 +727,5 @@ def main():
 
         if index >= len(memory) or index == -67:
             break
-
-    if LAST_BYTES_OUT != BYTES_OUT:
-        writeSection(0x00, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
 
 main()
