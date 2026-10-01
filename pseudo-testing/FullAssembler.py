@@ -1,17 +1,25 @@
-input_code = list("""
+import os
+
+input_code = list(
+"""
 SECTION_HEADER
 
-SECTION SECTION_TYPE ; 1
-FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0 ; func(i32) -> void
-FUNCTION uleb 0 uleb 0 #main_type 1 ; func() -> void
+SECTION SECTION_TYPE
+uleb 3
+FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
+FUNCTION uleb 0 uleb 0 #main_type 1
+FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
 SECTION_END
 
 SECTION SECTION_IMPORT
+uleb 1
 uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
 SECTION_END
 
 SECTION SECTION_FUNCTION
-#main 0 $main_type
+uleb 2
+#main 1 $main_type
+#double 2 $double_type
 SECTION_END
 
 SECTION SECTION_EXPORT
@@ -20,92 +28,99 @@ uleb 4 str main FUNCTION_KIND $main
 SECTION_END
 
 SECTION SECTION_CODE
-uleb 1
+uleb 2
 
-FUNCTION_START ; main function
-    i32.const uleb 6
-    i32.const uleb 7
-    i32.add
-    call $print_i32
+FUNCTION_START ; main()
+    uleb 0
+    i32.const uleb 21
+    call $double
+    call $print_i32_type
     end
 FUNCTION_END
+
+FUNCTION_START ; double(i32) -> i32
+    uleb 0
+    local.get uleb 0
+    local.get uleb 0
+    i32.add
+    end
+FUNCTION_END
+
+SECTION_END
 """)
 
-#SECTION_END
-
-# pseudo code more indepth:
-#
-# define type print_i32_type(i32) -> void
-# define type main_type() -> void
-# import print_i32_type: "env.print_i32"
-# define function main_type: main()
-# export main: "main"
-# main:
-#    print_i32(6+7)
-#
-
-# pseudo code lite:
-#
-# import print_i32
-# func main() -> void {
-#     print_i32(6 + 7)
-# }
-#
-
 def print_i32(value): # import
-    print(value)
+    print(value, end='')
 
 def print_char(value): # import
-    print(value)
+    print(value, end='')
+
+output_directory = os.path.join(os.path.dirname(__file__), "bin")
+os.makedirs(output_directory, exist_ok=True)
+output_file = open(os.path.join(output_directory, "program.wasm"), "wb")
 
 def write_char(char): # import
-    print('write: `', char, '`')
+    output_file.write(bytearray([char]))
+
+    length_of_number = len(str(char))
+    string_of_number = str(char) + "," + " " * (4 - length_of_number)
+
+    if char >= 32 and char <= 126:
+        print("write: " + string_of_number + "'" + chr(char) + "'")
+    else:
+        print("write: " + string_of_number + "0x" + format(char, "02X"))
 
 def exit_program(errCode): # import
-    print('section memory dump: ', sectionMemory)
     exit(errCode)
 
-memory = list([0] * 1024)
+memory = list([0] * 1024 * 10)
 
 for i in range(len(input_code)):
     memory[i] = input_code[i].encode()[0]
 
-sectionMemory = list([0] * 1024) # global
+sectionMemory = list([0] * 1024 * 10) # global
+functionMemory = list([0] * 1024 * 10) # global
 
-BYTES_OUT = 0 # global
-LAST_BYTES_OUT = 0 # global
-LAST_VARIABLE_ID = 0 # global
+SECTION_BYTES_OUT = 0 # global
+SECTION_LAST_BYTES_OUT = 0 # global
+FUNCTION_BYTES_OUT = 0 # global
+FUNCTION_LAST_BYTES_OUT = 0 # global
+WRITING_TO_FUNCTION = 0 # global
+LAST_SYMBOL_ID = 0 # global
 CURRENT_SECTION: int = 0 # global
 
-variable_names = list([0] * 1024) # global
-variable_names_stack_index: int = 0 # global
-# variable names formatted like this:
-# ID STR_LENGTH STRING
-# example:
-# 3, 5, 'H', 'e', 'l', 'l', 'o'
+# All named things use the same two flat stacks.  Names are stored as
+# ID, KIND, STR_LENGTH, STRING_BYTES.  Values are stored as ID, VALUE.
+# KIND 0 is a normal variable; KIND 1 is a control-flow label.
+SYMBOL_VARIABLE = 0
+SYMBOL_LABEL = 1
+symbol_names = list([0] * 1024 * 4) # global
+symbol_names_stack_index: int = 0 # global
+symbol_values = list([0] * 1024 * 4) # global
+symbol_values_stack_index: int = 0 # global
 
-variable_values = list([0] * 1024) # global
-variable_values_stack_index: int = 0 # global
-# variable values formatted like this:
-# ID VALUE
-# example:
-# 3, 72
+LABEL_SCOPE = 0 # global
+LABEL_FIRST_SYMBOL_ID = 0 # global; labels from earlier functions are invalid
 
 def writeSectionChar(char: int) -> None:
-    global BYTES_OUT
-    sectionMemory[BYTES_OUT] = char
-    BYTES_OUT = BYTES_OUT + 1 
+    global SECTION_BYTES_OUT
+    global FUNCTION_BYTES_OUT
+    global WRITING_TO_FUNCTION
+    if WRITING_TO_FUNCTION == 1:
+        functionMemory[FUNCTION_BYTES_OUT] = char
+        FUNCTION_BYTES_OUT = FUNCTION_BYTES_OUT + 1
+    else:
+        sectionMemory[SECTION_BYTES_OUT] = char
+        SECTION_BYTES_OUT = SECTION_BYTES_OUT + 1 
 
-def writeSection(type: int, length: int, start: int) -> None:
-    write_char(type)
+def writeSection(writing_function: int, type: int, length: int, start: int) -> None:
+    if writing_function == 0:
+        write_char(type)
 
     section_length = length
 
     # write length as ULEB128
     byte = 0
-
-    if length == 0:
-        write_char(0)
 
     while length > 0:
         byte = length & 0x7F
@@ -113,14 +128,20 @@ def writeSection(type: int, length: int, start: int) -> None:
         if length >= 128:
             byte |= 0x80
 
-        write_char(byte)
+        if writing_function == 1:
+            writeSectionChar(byte)
+        else:
+            write_char(byte)
         length = length >> 7
 
     # write section data
     index = start
 
     while index < start + section_length:
-        write_char(sectionMemory[index])
+        if writing_function == 1:
+            writeSectionChar(functionMemory[index])
+        else:
+            write_char(sectionMemory[index])
         index += 1
 
 def isWhiteSpace(index: int) -> int:
@@ -287,9 +308,9 @@ def writeFromUleb(index: int) -> int:
     return index
 
 def setVariable(index: int) -> int:
-    global LAST_VARIABLE_ID
-    global variable_names_stack_index
-    global variable_values_stack_index
+    global LAST_SYMBOL_ID
+    global symbol_names_stack_index
+    global symbol_values_stack_index
 
     variable_name_start = index
     variable_name_length = 0
@@ -316,26 +337,29 @@ def setVariable(index: int) -> int:
             break
 
     # Store variable name:
-    variable_names[variable_names_stack_index] = LAST_VARIABLE_ID
-    variable_names_stack_index += 1
+    symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+    symbol_names_stack_index += 1
 
-    variable_names[variable_names_stack_index] = variable_name_length
-    variable_names_stack_index += 1
+    symbol_names[symbol_names_stack_index] = SYMBOL_VARIABLE
+    symbol_names_stack_index += 1
+
+    symbol_names[symbol_names_stack_index] = variable_name_length
+    symbol_names_stack_index += 1
 
     while loop_index < variable_name_length:
-        variable_names[variable_names_stack_index] = memory[variable_name_start + loop_index]
+        symbol_names[symbol_names_stack_index] = memory[variable_name_start + loop_index]
 
-        variable_names_stack_index += 1
+        symbol_names_stack_index += 1
         loop_index += 1
 
     # Store variable value:
-    variable_values[variable_values_stack_index] = LAST_VARIABLE_ID
-    variable_values_stack_index += 1
+    symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
+    symbol_values_stack_index += 1
 
-    variable_values[variable_values_stack_index] = result
-    variable_values_stack_index += 1
+    symbol_values[symbol_values_stack_index] = result
+    symbol_values_stack_index += 1
 
-    LAST_VARIABLE_ID += 1
+    LAST_SYMBOL_ID += 1
 
     return index
 
@@ -355,13 +379,15 @@ def getVariable(index: int) -> int:
         if isWhiteSpace(index):
             break
 
-    # Search variable_names
-
-    while vname_pointer < variable_names_stack_index:
-        variable_id = variable_names[vname_pointer]
+    # Search symbol names for a normal variable.
+    while vname_pointer < symbol_names_stack_index:
+        variable_id = symbol_names[vname_pointer]
         vname_pointer += 1
 
-        stored_name_length = variable_names[vname_pointer]
+        symbol_kind = symbol_names[vname_pointer]
+        vname_pointer += 1
+
+        stored_name_length = symbol_names[vname_pointer]
         vname_pointer += 1
 
         matches = 1
@@ -369,26 +395,25 @@ def getVariable(index: int) -> int:
         # Lengths must match first
         if stored_name_length != variable_name_length:
             matches = 0
+        if symbol_kind != SYMBOL_VARIABLE:
+            matches = 0
 
         # Compare characters
         loop_index = 0
         while loop_index < stored_name_length:
 
             if matches == 1:
-                if memory[variable_name_start + loop_index] != variable_names[vname_pointer + loop_index]:
+                if memory[variable_name_start + loop_index] != symbol_names[vname_pointer + loop_index]:
                     matches = 0
 
             loop_index += 1
 
         if matches == 1:
-            # Search [ID, value] pairs
             value_pointer = 0
-            while value_pointer < variable_values_stack_index:
-                if variable_values[value_pointer] == variable_id:
-                    value = variable_values[value_pointer + 1]
+            while value_pointer < symbol_values_stack_index:
+                if symbol_values[value_pointer] == variable_id:
+                    value = symbol_values[value_pointer + 1]
 
-                    # Assuming LAST_BYTES_OUT represents the
-                    # value that your assembler should output.
                     writeByte(value)
                     return index
 
@@ -398,7 +423,98 @@ def getVariable(index: int) -> int:
 
     error(0x03)
 
+def setLabel(index: int) -> int:
+    global LAST_SYMBOL_ID
+    global symbol_names_stack_index
+    global symbol_values_stack_index
+
+    label_start = index
+    label_length = 0
+    loop_index = 0
+
+    while not isWhiteSpace(index):
+        label_length += 1
+        index += 1
+
+    if label_length == 0 or LABEL_SCOPE == 0:
+        error(0x05)
+
+    # Store label name: ID, kind, length, then each character byte.
+    symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+    symbol_names_stack_index += 1
+    symbol_names[symbol_names_stack_index] = SYMBOL_LABEL
+    symbol_names_stack_index += 1
+    symbol_names[symbol_names_stack_index] = label_length
+    symbol_names_stack_index += 1
+    while loop_index < label_length:
+        symbol_names[symbol_names_stack_index] = memory[label_start + loop_index]
+        symbol_names_stack_index += 1
+        loop_index += 1
+
+    # Store label value: ID and the control-flow scope it refers to.
+    symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
+    symbol_values_stack_index += 1
+    symbol_values[symbol_values_stack_index] = LABEL_SCOPE
+    symbol_values_stack_index += 1
+
+    LAST_SYMBOL_ID += 1
+    return index
+
+def getLabel(index: int) -> int:
+    label_start = index
+    label_length = 0
+    name_pointer = 0
+    label_id = 0
+    stored_length = 0
+    matches = 0
+
+    while True:
+        label_length += 1
+        index += 1
+        if isWhiteSpace(index):
+            break
+
+    while name_pointer < symbol_names_stack_index:
+        label_id = symbol_names[name_pointer]
+        name_pointer += 1
+        symbol_kind = symbol_names[name_pointer]
+        name_pointer += 1
+        stored_length = symbol_names[name_pointer]
+        name_pointer += 1
+        matches = 1
+
+        if stored_length != label_length:
+            matches = 0
+        if symbol_kind != SYMBOL_LABEL:
+            matches = 0
+        if label_id < LABEL_FIRST_SYMBOL_ID:
+            matches = 0
+
+        loop_index = 0
+        while loop_index < stored_length:
+            if matches == 1:
+                if memory[label_start + loop_index] != symbol_names[name_pointer + loop_index]:
+                    matches = 0
+            loop_index += 1
+
+        if matches == 1:
+            value_pointer = 0
+            while value_pointer < symbol_values_stack_index:
+                if symbol_values[value_pointer] == label_id:
+                    label_scope = symbol_values[value_pointer + 1]
+                    branch_depth = LABEL_SCOPE - label_scope
+                    if branch_depth < 0:
+                        error(0x06)
+                    writeByte(branch_depth)
+                    return index
+                value_pointer += 2
+
+        name_pointer += stored_length
+
+    error(0x06)
+
 def parseCmd(index: int) -> int:
+    global LABEL_SCOPE
     i32_arithmatic = 0x6A
     i32_comparison = 0x45
     i64_arithmatic = 0x7C
@@ -410,19 +526,19 @@ def parseCmd(index: int) -> int:
     type_arithmatic = 0
     type_comparison = 0
     type = 10
-    if equals4(index, 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '.'.encode()[0]):
+    if memory[index] == 'i'.encode()[0] and memory[index + 1] == '3'.encode()[0] and memory[index + 2] == '2'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
         type = 0x00
         type_arithmatic = i32_arithmatic
         type_comparison = i32_comparison
-    if equals4(index, 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '.'.encode()[0]):
+    if memory[index] == 'i'.encode()[0] and memory[index + 1] == '6'.encode()[0] and memory[index + 2] == '4'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
         type = 0x01
         type_arithmatic = i64_arithmatic
         type_comparison = i64_comparison
-    if equals4(index, 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '.'.encode()[0]):
+    if memory[index] == 'f'.encode()[0] and memory[index + 1] == '3'.encode()[0] and memory[index + 2] == '2'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
         type = 0x02
         type_arithmatic = f32_arithmatic
         type_comparison = f32_comparison
-    if equals4(index, 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '.'.encode()[0]):
+    if memory[index] == 'f'.encode()[0] and memory[index + 1] == '6'.encode()[0] and memory[index + 2] == '4'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
         type = 0x03
         type_arithmatic = f64_arithmatic
         type_comparison = f64_comparison
@@ -430,18 +546,23 @@ def parseCmd(index: int) -> int:
     # control flow
     if equals5(index, 'b'.encode()[0], 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'k'.encode()[0]):
         writeByte(0x02)
+        LABEL_SCOPE += 1
         return index + 5
     if equals4(index, 'l'.encode()[0], 'o'.encode()[0], 'o'.encode()[0], 'p'.encode()[0]):
         writeByte(0x03)
+        LABEL_SCOPE += 1
         return index + 4
     if equals2(index, 'i'.encode()[0], 'f'.encode()[0]):
         writeByte(0x04)
+        LABEL_SCOPE += 1
         return index + 2
     if equals4(index, 'e'.encode()[0], 'l'.encode()[0], 's'.encode()[0], 'e'.encode()[0]):
         writeByte(0x05)
         return index + 4
     if equals3(index, 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
         writeByte(0x0B)
+        if LABEL_SCOPE > 0:
+            LABEL_SCOPE -= 1
         return index + 3
     if equals2(index, 'b'.encode()[0], 'r'.encode()[0]):
         writeByte(0x0C)
@@ -490,16 +611,16 @@ def parseCmd(index: int) -> int:
         if equals3(index, 'm'.encode()[0], 'u'.encode()[0], 'l'.encode()[0]):
             writeByte(type_arithmatic + 2)
             return index + 3
-        if equals5('d'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+        if equals5(index, 'd'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
             writeByte(type_arithmatic + 3)
             return index + 5
-        if equals5('d'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+        if equals5(index, 'd'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
             writeByte(type_arithmatic + 4)
             return index + 5
-        if equals5('r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+        if equals5(index, 'r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
             writeByte(type_arithmatic + 5)
             return index + 5
-        if equals5('r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+        if equals5(index, 'r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
             writeByte(type_arithmatic + 6)
             return index + 5
         if equals3(index, 'a'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
@@ -649,9 +770,14 @@ def parseCmd(index: int) -> int:
     return index 
 
 def parseWord(index: int) -> int:
-    global LAST_BYTES_OUT
-    global BYTES_OUT
+    global SECTION_LAST_BYTES_OUT
+    global SECTION_BYTES_OUT
+    global FUNCTION_LAST_BYTES_OUT
+    global FUNCTION_BYTES_OUT
     global CURRENT_SECTION
+    global WRITING_TO_FUNCTION
+    global LABEL_SCOPE
+    global LABEL_FIRST_SYMBOL_ID
     if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
         return writeFromHex(index + 3)
     if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
@@ -664,10 +790,10 @@ def parseWord(index: int) -> int:
     if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
         return writeFromUleb(index + 4)
     if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
-        LAST_BYTES_OUT = BYTES_OUT
+        SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
         return index + 7
     if equals11(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
-        writeSection(CURRENT_SECTION, BYTES_OUT - LAST_BYTES_OUT, LAST_BYTES_OUT)
+        writeSection(WRITING_TO_FUNCTION, CURRENT_SECTION, SECTION_BYTES_OUT - SECTION_LAST_BYTES_OUT, SECTION_LAST_BYTES_OUT)
         return index + 11
     if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'H'.encode()[0], 'E'.encode()[0], 'A'.encode()[0], 'D'.encode()[0], 'E'.encode()[0], 'R'.encode()[0]):
         write_char(0x00)
@@ -706,16 +832,37 @@ def parseWord(index: int) -> int:
     if equals13(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
         writeByte(0x00)
         return index + 13
+    if equals14(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'S'.encode()[0], 'T'.encode()[0], 'A'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+        FUNCTION_LAST_BYTES_OUT = FUNCTION_BYTES_OUT
+        WRITING_TO_FUNCTION = 1
+        LABEL_SCOPE = 0
+        LABEL_FIRST_SYMBOL_ID = LAST_SYMBOL_ID
+        return index + 14
+    if equals12(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+        WRITING_TO_FUNCTION = 0
+        writeSection(1, 0, FUNCTION_BYTES_OUT - FUNCTION_LAST_BYTES_OUT, FUNCTION_LAST_BYTES_OUT)
+        LABEL_SCOPE = 0
+        return index + 12
+    if equals9(index, 'N'.encode()[0], 'O'.encode()[0], '_'.encode()[0], 'R'.encode()[0], 'E'.encode()[0], 'T'.encode()[0], 'U'.encode()[0], 'R'.encode()[0], 'N'.encode()[0]):
+        writeByte(0x40)
+        return index + 9
     if isComment(index):
         return skipComment(index)
     if memory[index] == '#'.encode()[0]:
         return setVariable(index + 1)
     if memory[index] == '$'.encode()[0]:
         return getVariable(index + 1)
-    if parseCmd(index):
-        return index
+    if memory[index] == '@'.encode()[0]:
+        return setLabel(index + 1)
+    if memory[index] == '^'.encode()[0]:
+        return getLabel(index + 1)
     if memory[index] == 0:
         return -67
+    
+    parse_index = parseCmd(index)
+    
+    if parse_index != index:
+        return parse_index
 
     error(0x04)
 
@@ -729,3 +876,4 @@ def main():
             break
 
 main()
+output_file.close()

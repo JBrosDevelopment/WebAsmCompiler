@@ -28,6 +28,7 @@ I will update the README as I progress through the project. Treat this almost as
     - [GLOBAL Section](#global-section)
     - [EXPORT Section](#export-section)
     - [CODE Section](#code-section)
+    - [Python Assembler Equivalents](#python-assembler-equivalents)
 
 # Setting Up WebAsm
 
@@ -594,8 +595,8 @@ FUNCTION_START ; other_func function
     uleb 1 ; declaration group
     uleb 3 i32 #x 0 #y 1 #z 2 ; local variables
     
-    block NO_RETURN %block1
-        loop NO_RETURN %loop1
+    block NO_RETURN @block1
+        loop NO_RETURN @loop1
             local.get $x
             local.get $y
             i32.mul
@@ -619,4 +620,81 @@ SECTION_END
 
 You can view the opcodes for the above code in the [Opcodes.md](Opcodes.md) file.
 
-The `%` and the `^` are used to define and reference labels for the `block`, `loop`, and `br_if` opcodes. The `%block1` and `%loop1` are labels that can be used to reference the block and loop, and the `^block1` is used to reference the block when using the `br_if` opcode. This is to make it easier to use brances in the language instead of counting the depth.
+The `@` and the `^` are used to define and reference labels for the `block`, `loop`, and `br_if` opcodes. The `@block1` and `@loop1` are labels that can be used to reference the block and loop, and the `^block1` is used to reference the block when using the `br_if` opcode. This is to make it easier to use brances in the language instead of counting the depth.
+
+### Python Assembler Equivalents
+
+Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [pseudo-testing/FullAssembler.py](pseudo-testing/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
+
+```
+PS D:\WebAsmCompiler> python .\pseudo-testing\FullAssembler.py   
+/* ... output ... */ 
+PS D:\WebAsmCompiler> node .\pseudo-testing\bin\run_program_wasm.js
+42
+```
+
+The output is `42` because the finished program is a simple program that doubles a number `21` and prints it to the console. It can be seen below:
+
+```
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+uleb 3 ; type count
+FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
+FUNCTION uleb 0 uleb 0 #main_type 1
+FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
+SECTION_END
+
+SECTION SECTION_IMPORT
+uleb 1 ; import count
+uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
+SECTION_END
+
+SECTION SECTION_FUNCTION
+uleb 2 ; function count
+#main 1 $main_type
+#double 2 $double_type
+SECTION_END
+
+SECTION SECTION_EXPORT
+uleb 1 ; export count
+uleb 4 str main FUNCTION_KIND $main
+SECTION_END
+
+SECTION SECTION_CODE
+uleb 2 ; function count
+
+FUNCTION_START ; main()
+    uleb 0
+    i32.const uleb 21
+    call $double
+    call $print_i32_type
+    end
+FUNCTION_END
+
+FUNCTION_START ; double(i32) -> i32
+    uleb 0
+    local.get uleb 0
+    local.get uleb 0
+    i32.add
+    end
+FUNCTION_END
+
+SECTION_END
+```
+
+And this assembles into:
+
+```
+0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,  
+0x01, 0x0c, 0x60, 0x01, 0x7f, 0x00, 0x60, 0x00,  
+0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x02, 0x11,  
+0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x70, 0x72,  
+0x69, 0x6e, 0x74, 0x5f, 0x69, 0x33, 0x32, 0x00,  
+0x00, 0x03, 0x03, 0x02, 0x01, 0x02, 0x07, 0x08,  
+0x01, 0x04, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x01,  
+0x0a, 0x12, 0x02, 0x08, 0x00, 0x41, 0x15, 0x10,  
+0x02, 0x10, 0x00, 0x0b, 0x07, 0x00, 0x20, 0x00,  
+0x20, 0x00, 0x6a, 0x0b,  
+```
+
