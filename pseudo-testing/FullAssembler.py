@@ -5,32 +5,27 @@ input_code = list(
 SECTION_HEADER
 
 SECTION SECTION_TYPE
-uleb 3
-FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
-FUNCTION uleb 0 uleb 0 #main_type 1
-FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
+COUNT FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
+COUNT FUNCTION uleb 0 uleb 0 #main_type 1
+COUNT FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
 SECTION_END
 
 SECTION SECTION_IMPORT
-uleb 1
-uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
+COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
 SECTION_END
 
 SECTION SECTION_FUNCTION
-uleb 2
-#main 1 $main_type
-#double 2 $double_type
+COUNT #main 1 $main_type
+COUNT #double 2 $double_type
 SECTION_END
 
 SECTION SECTION_EXPORT
-uleb 1
-uleb 4 str main FUNCTION_KIND $main
+COUNT uleb 4 str main FUNCTION_KIND $main
 SECTION_END
 
 SECTION SECTION_CODE
-uleb 2
 
-FUNCTION_START ; main()
+COUNT FUNCTION_START ; main()
     uleb 0
     i32.const uleb 21
     call $double
@@ -38,7 +33,7 @@ FUNCTION_START ; main()
     end
 FUNCTION_END
 
-FUNCTION_START ; double(i32) -> i32
+COUNT FUNCTION_START ; double(i32) -> i32
     uleb 0
     local.get uleb 0
     local.get uleb 0
@@ -88,6 +83,7 @@ FUNCTION_LAST_BYTES_OUT = 0 # global
 WRITING_TO_FUNCTION = 0 # global
 LAST_SYMBOL_ID = 0 # global
 CURRENT_SECTION: int = 0 # global
+COUNT: int = 0 # global
 
 # All named things use the same two flat stacks.  Names are stored as
 # ID, KIND, STR_LENGTH, STRING_BYTES.  Values are stored as ID, VALUE.
@@ -114,25 +110,41 @@ def writeSectionChar(char: int) -> None:
         SECTION_BYTES_OUT = SECTION_BYTES_OUT + 1 
 
 def writeSection(writing_function: int, type: int, length: int, start: int) -> None:
+    section_length = length
+    count = COUNT
+    
     if writing_function == 0:
         write_char(type)
+        remaining_count = count
+        while remaining_count > 0:
+            length += 1
+            remaining_count >>= 7
 
-    section_length = length
-
-    # write length as ULEB128
-    byte = 0
+    # write length and count as ULEB128
+    length_byte = 0
 
     while length > 0:
-        byte = length & 0x7F
+        length_byte = length & 0x7F
 
         if length >= 128:
-            byte |= 0x80
+            length_byte |= 0x80
 
         if writing_function == 1:
-            writeSectionChar(byte)
+            writeSectionChar(length_byte)
         else:
-            write_char(byte)
+            write_char(length_byte)
         length = length >> 7
+
+    count_byte = 0
+
+    while count > 0 and writing_function == 0: # if COUNT == 0, don't write, so count > 0 is fine
+        count_byte = count & 0x7F
+
+        if count >= 128:
+            count_byte |= 0x80
+
+        write_char(count_byte)
+        count = count >> 7
 
     # write section data
     index = start
@@ -792,6 +804,7 @@ def parseWord(index: int) -> int:
     global WRITING_TO_FUNCTION
     global LABEL_SCOPE
     global LABEL_FIRST_SYMBOL_ID
+    global COUNT
     if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
         return writeFromHex(index + 3)
     if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
@@ -805,6 +818,7 @@ def parseWord(index: int) -> int:
         return writeFromUleb(index + 4)
     if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
         SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
+        COUNT = 0
         return index + 7
     if equals11(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
         writeSection(WRITING_TO_FUNCTION, CURRENT_SECTION, SECTION_BYTES_OUT - SECTION_LAST_BYTES_OUT, SECTION_LAST_BYTES_OUT)
@@ -846,6 +860,9 @@ def parseWord(index: int) -> int:
     if equals13(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
         writeSectionChar(0x00)
         return index + 13
+    if equals11(index, 'M'.encode()[0], 'E'.encode()[0], 'M'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'Y'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+        writeSectionChar(0x02)
+        return index + 11
     if equals14(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'S'.encode()[0], 'T'.encode()[0], 'A'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
         FUNCTION_LAST_BYTES_OUT = FUNCTION_BYTES_OUT
         WRITING_TO_FUNCTION = 1
@@ -860,6 +877,9 @@ def parseWord(index: int) -> int:
     if equals9(index, 'N'.encode()[0], 'O'.encode()[0], '_'.encode()[0], 'R'.encode()[0], 'E'.encode()[0], 'T'.encode()[0], 'U'.encode()[0], 'R'.encode()[0], 'N'.encode()[0]):
         writeSectionChar(0x40)
         return index + 9
+    if equals5(index, 'C'.encode()[0], 'O'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'T'.encode()[0]):
+        COUNT += 1
+        return index + 5
     if isComment(index):
         return skipComment(index)
     if memory[index] == '#'.encode()[0]:

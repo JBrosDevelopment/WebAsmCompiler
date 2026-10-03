@@ -30,6 +30,7 @@ I will update the README as I progress through the project. Treat this almost as
     - [CODE Section](#code-section)
     - [Python Assembler Equivalent](#python-assembler-equivalent)
     - [Implementing the Assembler in WebAsm](#implementing-the-assembler-in-webasm)
+    - [Bootstrapping and Adding Versions](#bootstrapping-and-adding-versions)
 
 # Setting Up WebAsm
 
@@ -719,3 +720,82 @@ Here are the parameters:
 - Read README.md to figure out how the wal assembly syntax looks like. Also you can look at the example at the top of the python file.
 - Your entire code should stay limited to Assembler/assembler.0.1.wal
 ```
+
+Besides showing me many bug fixes for my python assembler, it did in fact create the assembler in the Assembly language. The assembler is in the [assembler.0.1.wal](./Assembler/assembler.0.1.wal) file. I will be using this assembler to assemble my input assembly program that does the same thing as the python assembler. This is a huge step forward in this project, and I am excited to see what I can do with this new assembler. It is crazy how it just did it, and if you open up the file you will see it is 9000 lines long, which is insane. It works perfectly, very surprisingly. The final `bin/assembler.0.1.wasm` file is **14.5 KB** (14,879 Bytes).
+
+I then created an [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file that adds `MEMORY_KIND` and `COUNT` keywords. I made the changes myself and put them in the [FullAssembler.py](./pseudo-testing/FullAssembler.py) and made the changes in the [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file. I had Chat GPT then make the file easier to read and formatted it better, as well as using the `$`, `#`, `@`, and `^` symbols for variables and labels making the code more readable. The changes I made in the file also had bugs and Chat GPT was able to catch the bugs and help me fix them. The final file reached 7939 lines of code 11,860 Bytes. The reason it is smaller is because the way Chat GPT was matching character and tokens made no sense to me, and I suggested using `str A` and then adding `uleb 128` instead of using a `i32.shl` and other weird things. This really optimized the code by a signifigent amount. 
+
+For example assembler.0.1.wal does this, taking 8 bytes per adding a chacter to the stack:
+
+```
+i32.const uleb 1
+i32.const uleb 6
+i32.shl
+i32.const uleb 6
+i32.or
+```
+
+And assembler.0.2.wal does this, taking 5 bytes per adding character to the stack:
+
+```
+i32.const uleb 128
+i32.const str F
+i32.add
+```
+
+Saving 3 bytes or %37 smaller. When I was going through the code I was confused on why Chat GPT did this so when I was able to make it easier to read and saving space it was a no-brainer.
+
+### Bootstrapping and Adding Versions
+
+I assembled the 0.1 assembler and used the outputted wasm file to assemble the 0.1 assembly file again, effectively checking if the assembler could assemble itself. It succeffully did so and both files were identical. I did the same thing with 0.2 and now versions 0.1 and 0.2 both fully work and are valid assemblers. Version 0.2 has more a couple more features, is lot easier to read the code, and is more optimized. 
+
+```js
+// to run the assembler.0.1 wasm and input the same program (assembler.0.1.wal) and output assembler.0.1.wasm2, which should be equal to the original
+// node ./Assembler/bin/runner.js ./Assembler/assembler.0.1.wal ./Assembler/bin/assembler.0.1.wal.wasm2
+// to assemble assembler.0.2.wal into assembler.0.2.wal.wasm from the assembler.0.1.wal.wasm assembler
+// node ./Assembler/bin/runner.js ./Assembler/assembler.0.2.wal ./Assembler/bin/assembler.0.2.wal.wasm
+
+import { readFileSync, writeFileSync } from 'fs';
+
+const inputFile = 'Assembler/bin/assembler.0.2.wal.wasm';
+
+const sourcePath = process.argv[2];
+const outputPath = process.argv[3];
+
+if (!sourcePath || !outputPath) 
+    throw new Error('Supply input WAL and output WASM paths');
+
+const text = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
+if (/[^\x00-\x7f]/.test(text)) 
+    throw new Error('This assembler accepts ASCII source');
+
+const source = Buffer.from(text, 'ascii');
+if (source.length + 17 >= 4194304) 
+    throw new Error('Input exceeds 4 MiB source region');
+
+const output = [];
+
+const module = new WebAssembly.Module(readFileSync(inputFile));
+
+const instance = new WebAssembly.Instance(module, {
+  env: {
+    print_i32: n => process.stdout.write(String(n)),
+    print_char: n => process.stdout.write(String.fromCharCode(n)),
+    write_char: n => output.push(n),
+    exit_program: n => {
+      throw new Error('Assembler error ' + n);
+    }
+  }
+});
+
+const memory = new Uint8Array(instance.exports.memory.buffer);
+
+memory.set(source); 
+memory.fill(0, source.length, source.length + 17);
+
+instance.exports.main();
+
+writeFileSync(outputPath, Buffer.from(output));
+```
+
+This is the only JavaScript neccissary to use the WebAsm Assembler, and the Python code has been completely seperated and is no longer apart of the tool chain. Each iteration I make upon the assembler will come from the previous assembler itself and not from any outside code.
