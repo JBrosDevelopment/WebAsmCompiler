@@ -1,53 +1,15 @@
 import os
+import sys
 
-input_code = list(
-"""
-SECTION_HEADER
+script_dir = os.path.dirname(os.path.abspath(__file__))
+input_file_name = sys.argv[1] if len(sys.argv) > 1 else "assembler.0.0.wal"
+input_file_path = os.path.join(script_dir, input_file_name)
 
-SECTION SECTION_TYPE
-uleb 3
-FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
-FUNCTION uleb 0 uleb 0 #main_type 1
-FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
-SECTION_END
+input_code = ""
 
-SECTION SECTION_IMPORT
-uleb 1
-uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
-SECTION_END
+with open(input_file_path, "r") as f:
+    input_code = f.read()
 
-SECTION SECTION_FUNCTION
-uleb 2
-#main 1 $main_type
-#double 2 $double_type
-SECTION_END
-
-SECTION SECTION_EXPORT
-uleb 1
-uleb 4 str main FUNCTION_KIND $main
-SECTION_END
-
-SECTION SECTION_CODE
-uleb 2
-
-FUNCTION_START ; main()
-    uleb 0
-    i32.const uleb 21
-    call $double
-    call $print_i32_type
-    end
-FUNCTION_END
-
-FUNCTION_START ; double(i32) -> i32
-    uleb 0
-    local.get uleb 0
-    local.get uleb 0
-    i32.add
-    end
-FUNCTION_END
-
-SECTION_END
-""")
 
 def print_i32(value): # import
     print(value, end='')
@@ -57,7 +19,7 @@ def print_char(value): # import
 
 output_directory = os.path.join(os.path.dirname(__file__), "bin")
 os.makedirs(output_directory, exist_ok=True)
-output_file = open(os.path.join(output_directory, "program.wasm"), "wb")
+output_file = open(os.path.join(output_directory, input_file_name + ".wasm"), "wb")
 
 def write_char(char): # import
     output_file.write(bytearray([char]))

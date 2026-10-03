@@ -1,0 +1,38 @@
+; this is a assembler test file for the wal assembler
+
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+uleb 2
+FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
+FUNCTION uleb 0 uleb 0 #main_type 1
+SECTION_END
+
+SECTION SECTION_IMPORT
+uleb 1
+uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
+SECTION_END
+
+SECTION SECTION_FUNCTION
+uleb 1
+#main 1 $main_type
+SECTION_END
+
+SECTION SECTION_EXPORT
+uleb 1
+uleb 4 str main FUNCTION_KIND $main
+SECTION_END
+
+SECTION SECTION_CODE
+uleb 1
+
+FUNCTION_START ; main function
+    uleb 0 ; declaration group
+    i32.const uleb 6
+    i32.const uleb 7
+    i32.add
+    call $print_i32_type
+    end
+FUNCTION_END
+
+SECTION_END

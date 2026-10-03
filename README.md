@@ -28,7 +28,8 @@ I will update the README as I progress through the project. Treat this almost as
     - [GLOBAL Section](#global-section)
     - [EXPORT Section](#export-section)
     - [CODE Section](#code-section)
-    - [Python Assembler Equivalents](#python-assembler-equivalents)
+    - [Python Assembler Equivalent](#python-assembler-equivalent)
+    - [Implementing the Assembler in WebAsm](#implementing-the-assembler-in-webasm)
 
 # Setting Up WebAsm
 
@@ -622,7 +623,7 @@ You can view the opcodes for the above code in the [Opcodes.md](Opcodes.md) file
 
 The `@` and the `^` are used to define and reference labels for the `block`, `loop`, and `br_if` opcodes. The `@block1` and `@loop1` are labels that can be used to reference the block and loop, and the `^block1` is used to reference the block when using the `br_if` opcode. This is to make it easier to use brances in the language instead of counting the depth.
 
-### Python Assembler Equivalents
+### Python Assembler Equivalent
 
 Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [pseudo-testing/FullAssembler.py](pseudo-testing/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
 
@@ -698,3 +699,23 @@ And this assembles into:
 0x20, 0x00, 0x6a, 0x0b,  
 ```
 
+Some cool things I ran into is that `i32`, `i64`, `f32`, and `f64` each have their own `add`, `sub`, etc. opcodes, so instead of checking each one, there are shortcuts. For example, `i32.add` is `0x6A`, `i64.add` is `0x7C`, `f32.add` is `0x92`, and `f64.add` is `0xA0`. So instead of checking for each one, I can just check for the type and then add the offset to the base opcode. Small things like these were some cool things I ran into while making the assembler. I also had to use multiple memory variables to store the section bytes, so that at the end of the section I can check the difference between the start and the end of section to get the byte count, and then write the byte count at the start of the section followed by the section contents. This was a little tricky to figure out, but I got it working in the end. I had to do the same thing with `FUNCTION_START` and `FUNCTION_END` to get the byte count of the function body. I also had to use a variable to store the current section, so that when I see a `SECTION_END` I can write the byte count at the start of the section. 
+
+### Implementing the Assembler in WebAsm
+
+Because of how large the python file came out to be (800 lines), instead of implementing the assembler in WebAsm, I will use the python assembler only to create the first iteration of the WebAsm assembler. This means I will use the python WebAsm assembler to assemble my input assembly program that does the same thing as the python assembler. This is better than trying to implement the assembler in the bytecode because of how much effort it would take. I know it is a drawback, but the [Replacing Assembler](#second-step-input-is-text-and-output-is-bytes) took so long to implement, and that was just 120 lines of python code. The full assembler is 880 lines of python code, and that would be a nightmare to implement in WebAsm. So for now, I will use the python assembler to create the first iteration of the WebAsm assembler. 
+
+I actually don't want to lose interest in this project, and I know making this first iteration would be easier in the Assembly language, but it would still take a lot of time in effort. So I have decided to get Chat GPT (6.1 Sol) to make the assembler in the Assembly language. Chat GPT will make the assembler in the [assembler.0.1.wal](./Assembler/assembler.0.1.wal) (.wal = WebAsm Assembly Language) file. 
+
+For full transparency this is the entire message I sent to Chat GPT (6.1 Sol) to make the assembler in the Assembly language:
+
+```
+Here are the parameters:
+- create an assembler in .wal format (this is a custom web assembly I made (WebAsm Assembly Language))
+- Base this assembler DIRECTLY off of the python file: Assembler/assembler.0.0.py
+- In the end, the python file will assemble your wal program and this new program will be used instead of the python file
+- Please ask if you have any questions, and if you find any bugs in the python file, please stop and alert me to it and offer the fix. DO NOT edit the python file without asking my permission first.
+- Please directly convert the python file into the wal program the best you can. Provide comments on each line that is converted.
+- Read README.md to figure out how the wal assembly syntax looks like. Also you can look at the example at the top of the python file.
+- Your entire code should stay limited to Assembler/assembler.0.1.wal
+```
