@@ -804,13 +804,14 @@ This is the only JavaScript neccissary to use the WebAsm Assembler, and the Pyth
 
 For any program, error handling and error messages are neccisary for ease of development. This will also add the need for `print_string` as another JavaScript import. The import will look like this: `function print_string(pointer: i32, length: i32) -> void`. Because strings will be passed as memory pointers, All strings will have to be set in memory before the program starts. So in the `main` entry function of the Assembly program, I will store all the strings and save their locations as variables using the `#` and `$` syntax in the assembler.
 
-I will also add a sort of stack trace, where it will show exactly which byte caused the problem, and what function is currently being run. Here is an example error message: 
+Here is an example error message: 
 
 ```
 PS D:\WebAsmCompiler> node Assembler/bin/run_wasm.js program.wasm
 Error: Variable `print_i32` does not exist.
-> Traced to `double` function (index 2)
-> Called by `main` function (index 1)
-> Error occured at byte `0x76` or `118`
-Program Fault
+Occured in Section `CODE`.
+Error occured on line `56`:
+call $print_i32
+     ~~~~~~~~~~
+Program Fault.
 ```

@@ -44,15 +44,26 @@ FUNCTION_END
 SECTION_END
 """)
 
-def print_i32(value): # import
-    print(value, end='')
+memory = list([0] * (len(input_code) + 17))
 
-def print_char(value): # import
-    print(value, end='')
+for i in range(len(input_code)):
+    memory[i] = input_code[i].encode()[0]
 
 output_directory = os.path.join(os.path.dirname(__file__), "bin")
 os.makedirs(output_directory, exist_ok=True)
 output_file = open(os.path.join(output_directory, "program.wasm"), "wb")
+
+def print_i32(value): # import
+    print(value, end='')
+
+def print_char(value): # import
+    print(chr(value), end='')
+
+def print_string(pointer: (int|str), _length: int): # import
+    print(pointer, end='')
+    # this is not real implementation of print_string, because strings in the WebAsm assembler are stored in memory
+    # because this python assembler is like this, we can just use the "pointer" and not use the length
+    # the parameter `pointer` is not actually a pointer at all in this python context, it is a python str object. 
 
 def write_char(char): # import
     output_file.write(bytearray([char]))
@@ -61,17 +72,14 @@ def write_char(char): # import
     string_of_number = str(char) + "," + " " * (4 - length_of_number)
 
     if char >= 32 and char <= 126:
-        print("write: " + string_of_number + "'" + chr(char) + "'")
+        #print("write: " + string_of_number + "'" + chr(char) + "'")
+        pass
     else:
-        print("write: " + string_of_number + "0x" + format(char, "02X"))
+        #print("write: " + string_of_number + "0x" + format(char, "02X"))
+        pass
 
 def exit_program(errCode): # import
     exit(errCode)
-
-memory = list([0] * (len(input_code) + 17))
-
-for i in range(len(input_code)):
-    memory[i] = input_code[i].encode()[0]
 
 sectionMemory = list([0] * max(1024 * 1024, len(input_code))) # global
 functionMemory = list([0] * max(1024 * 1024, len(input_code))) # global
@@ -85,9 +93,10 @@ LAST_SYMBOL_ID = 0 # global
 CURRENT_SECTION: int = 0 # global
 COUNT: int = 0 # global
 
-# All named things use the same two flat stacks.  Names are stored as
-# ID, KIND, STR_LENGTH, STRING_BYTES.  Values are stored as ID, VALUE.
-# KIND 0 is a normal variable; KIND 1 is a control-flow label.
+# All named things use the same two flat stacks. 
+# Names are stored as ID, KIND, STR_LENGTH, STRING_BYTES.
+# Values are stored as ID, VALUE.
+# KIND 0 is a normal variable, KIND 1 is a control-flow label.
 SYMBOL_VARIABLE = 0
 SYMBOL_LABEL = 1
 symbol_names = list([0] * 1024 * 4) # global
@@ -97,6 +106,39 @@ symbol_values_stack_index: int = 0 # global
 
 LABEL_SCOPE = 0 # global
 LABEL_FIRST_SYMBOL_ID = 0 # global; labels from earlier functions are invalid
+
+# Tracing
+CURRENT_LINE = 1 # global
+
+# Strings
+s_ei_start = "Error `"
+s_ei_end = "`: "
+s_vdne_start = "Variable `"
+s_vdne_end = "` does not exist.\n"
+s_ihc_start = "Invalid hex character `"
+s_ihc_end = "`, valid characters (0-9 and A-F).\n"
+s_ibc_start = "Invalid binary character `"
+s_ibc_end = "`, valid characters (0 and 1).\n"
+s_sizilc_start = "Scope is zero invalid label call `"
+s_sizilc_end = "`.\n"
+s_ik_start = "Invalid keyword `"
+s_ik_end = "`.\n"
+s_ldne_start = "Label `"
+s_ldne_end = "` does not exist.\n"
+s_ecind_start = "Error Code `"
+s_ecind_end = "` is not defined.\n"
+s_eool_start = "Error occured on line `"
+s_eool_end = "`.\n"
+s_ois_start = "Occured in Section `"
+s_ois_end = "`.\n"
+s_ois_TYPE = "TYPE"
+s_ois_IMPORT = "IMPORT"
+s_ois_FUNCTION = "FUNCTION"
+s_ois_MEMORY = "MEMORY"
+s_ois_GLOBAL = "GLOBAL"
+s_ois_EXPORT = "EXPORT"
+s_ois_CODE = "CODE"
+s_pf = "Program Fault."
 
 def writeSectionChar(char: int) -> None:
     global SECTION_BYTES_OUT
@@ -160,7 +202,10 @@ def isWhiteSpace(index: int) -> int:
     return memory[index] == ' '.encode()[0] or memory[index] == '\t'.encode()[0] or memory[index] == '\n'.encode()[0]
 
 def skipWhiteSpace(index: int) -> int:
+    global CURRENT_LINE
     while True:
+        if memory[index] == '\n'.encode()[0]:
+            CURRENT_LINE = CURRENT_LINE + 1
         if not isWhiteSpace(index):
             break
         index = index + 1
@@ -218,13 +263,85 @@ def equals14(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c
 def equals16(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int, c15: int, c16: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and memory[index + 14] == c15 and memory[index + 15] == c16 and isWhiteSpace(index + 16)
 
-def error(value):
-    print_char('E')
-    print_char('R')
-    print_char('R')
-    print_char('[')
-    print_i32(value)    
-    print_char(']')
+def error(index, value):
+    print_string(s_ei_start, len(s_ei_start))
+    print_i32(value)
+    print_string(s_ei_end, len(s_ei_end))
+    index_pointer = index
+    if value == 0x01:
+        print_string(s_ihc_start, len(s_ihc_start))
+        print_char(memory[index_pointer])
+        print_string(s_ihc_end, len(s_ihc_end))
+    if value == 0x02:
+        print_string(s_ibc_start, len(s_ibc_start))
+        print_char(memory[index_pointer])
+        print_string(s_ibc_end, len(s_ibc_end))
+    if value == 0x03:
+        print_string(s_vdne_start, len(s_vdne_start))
+    if value == 0x04:
+        print_string(s_ik_start, len(s_ik_start))
+    if value == 0x05:
+        print_string(s_ldne_start, len(s_ldne_start))
+    if value == 0x06:
+        print_string(s_sizilc_start, len(s_sizilc_start))
+    if value >= 0x03 and value <= 0x06:
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+    if value == 0x03:
+        print_string(s_vdne_end, len(s_vdne_end))
+    if value == 0x04:
+        print_string(s_ik_end, len(s_ik_end))
+    if value == 0x05:
+        print_string(s_ldne_end, len(s_ldne_end))
+    if value == 0x06:
+        print_string(s_sizilc_end, len(s_sizilc_end))
+    if value > 0x06 or value < 0x01:
+        print_i32(value)
+        print_string(s_ecind_end, len(s_ecind_end))
+
+    print_string(s_ois_start, len(s_ois_start))
+    if CURRENT_SECTION == 0x01:
+        print_string(s_ois_TYPE, len(s_ois_TYPE))
+    if CURRENT_SECTION == 0x02:
+        print_string(s_ois_IMPORT, len(s_ois_IMPORT))
+    if CURRENT_SECTION == 0x03:
+        print_string(s_ois_FUNCTION, len(s_ois_FUNCTION))
+    if CURRENT_SECTION == 0x05:
+        print_string(s_ois_MEMORY, len(s_ois_MEMORY))
+    if CURRENT_SECTION == 0x06:
+        print_string(s_ois_GLOBAL, len(s_ois_GLOBAL))
+    if CURRENT_SECTION == 0x07:
+        print_string(s_ois_EXPORT, len(s_ois_EXPORT))
+    if CURRENT_SECTION == 0x0A:
+        print_string(s_ois_CODE, len(s_ois_CODE))
+    print_string(s_ois_end, len(s_ois_end))
+        
+    print_string(s_eool_start, len(s_eool_start))
+    print_i32(CURRENT_LINE)
+    print_string(s_eool_end, len(s_eool_end))
+
+    index_pointer = index
+    while memory[index_pointer] != '\n'.encode()[0]:
+        index_pointer -= 1
+    index_pointer += 1
+    start_of_line = index_pointer
+    
+    print_char('\n'.encode()[0])
+    while memory[index_pointer] != '\n'.encode()[0]:
+        print_char(memory[index_pointer])
+        index_pointer += 1
+    print_char('\n'.encode()[0])
+    while start_of_line < index:
+        print_char(' '.encode()[0])
+        start_of_line += 1
+    while not isWhiteSpace(start_of_line):
+        print_char('~'.encode()[0])
+        start_of_line += 1
+    print_char('\n'.encode()[0])
+    print_char('\n'.encode()[0])
+
+    print_string(s_pf, len(s_pf))
     exit_program(value)
 
 def writeByte(number: int):
@@ -257,7 +374,7 @@ def writeFromHex(index: int) -> int:
         elif char >= 'a'.encode()[0] and char <= 'f'.encode()[0]:
             val = char - 'a'.encode()[0] + 10
         else:
-            error(0x01)
+            error(index, 0x01)
         
         result = result * 16 + val
 
@@ -281,7 +398,7 @@ def writeFromBin(index: int) -> int:
         if char == '0'.encode()[0] or char == '1'.encode()[0]:
             val = char - '0'.encode()[0]
         else:
-            error(0x02)
+            error(index, 0x02)
         
         result = (result << 1) | val
 
@@ -329,15 +446,9 @@ def setVariable(index: int) -> int:
     loop_index = 0
     result = 0
 
-    # Get variable name
-    while True:
+    while memory[index + variable_name_length] != 0 and not isWhiteSpace(index + variable_name_length):
         variable_name_length += 1
-        index += 1
-
-        if isWhiteSpace(index):
-            break
-
-    index = skipWhiteSpace(index)
+    index += variable_name_length
 
     # Get value
     while True:
@@ -383,13 +494,9 @@ def getVariable(index: int) -> int:
     matches = 0
     stored_name_length = 0
 
-    # Get variable name
-    while True:
+    while memory[index + variable_name_length] != 0 and not isWhiteSpace(index + variable_name_length):
         variable_name_length += 1
-        index += 1
-
-        if isWhiteSpace(index):
-            break
+    index += variable_name_length
 
     # Search symbol names for a normal variable.
     while vname_pointer < symbol_names_stack_index:
@@ -433,7 +540,7 @@ def getVariable(index: int) -> int:
 
         vname_pointer += stored_name_length
 
-    error(0x03)
+    error(variable_name_start, 0x03)
 
 def setLabel(index: int) -> int:
     global LAST_SYMBOL_ID
@@ -444,12 +551,12 @@ def setLabel(index: int) -> int:
     label_length = 0
     loop_index = 0
 
-    while not isWhiteSpace(index):
+    while memory[index + label_length] != 0 and not isWhiteSpace(index + label_length):
         label_length += 1
-        index += 1
+    index += label_length
 
     if label_length == 0 or LABEL_SCOPE == 0:
-        error(0x05)
+        error(label_start, 0x05)
 
     # Store label name: ID, kind, length, then each character byte.
     symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
@@ -480,11 +587,9 @@ def getLabel(index: int) -> int:
     stored_length = 0
     matches = 0
 
-    while True:
+    while memory[index + label_length] != 0 and not isWhiteSpace(index + label_length):
         label_length += 1
-        index += 1
-        if isWhiteSpace(index):
-            break
+    index += label_length
 
     while name_pointer < symbol_names_stack_index:
         label_id = symbol_names[name_pointer]
@@ -516,14 +621,14 @@ def getLabel(index: int) -> int:
                     label_scope = symbol_values[value_pointer + 1]
                     branch_depth = LABEL_SCOPE - label_scope
                     if branch_depth < 0:
-                        error(0x06)
+                        error(label_start, 0x06)
                     writeByte(branch_depth)
                     return index
                 value_pointer += 2
 
         name_pointer += stored_length
 
-    error(0x06)
+    error(label_start, 0x05)
 
 def parseCmd(index: int) -> int:
     global LABEL_SCOPE
@@ -898,7 +1003,7 @@ def parseWord(index: int) -> int:
     if parse_index != index:
         return parse_index
 
-    error(0x04)
+    error(index, 0x04)
 
 def main():
     index = 0
