@@ -4,7 +4,7 @@ This Project is to folliow the evolution of the Computers from opcode to program
 
 I will update the README as I progress through the project. Treat this almost as a blog of my progress.
 
-**[WEB ASSEMBLY OPCODES](Opcodes.md)**
+**[WEB ASSEMBLY OPCODES](.\Opcodes.md)**
 
 # Contents
 
@@ -41,7 +41,7 @@ I will update the README as I progress through the project. Treat this almost as
 
 ## First Program
 
-First thing I did was set up a javascript file that would load a `wasm` file and run it. I use [program.wasm](program.wasm) as the target. I also had to create a function to create the file and fill it with the binary data. With the help of ChatGPT to guide me, I was able to make a simple program that would run and I used node js for fast console output. 
+First thing I did was set up a javascript file that would load a `wasm` file and run it. I use program.wasm as the target. I also had to create a function to create the file and fill it with the binary data. With the help of ChatGPT to guide me, I was able to make a simple program that would run and I used node js for fast console output. 
 
 I created a program that would add two numbers and print the result. I used the `print_i32` function from the `env` module to print the result. The program is very simple, but it was a good starting point for me to learn how to create a web assembly binary file.
 

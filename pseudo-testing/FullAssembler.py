@@ -47,7 +47,7 @@ SECTION_END
 memory = list([0] * (len(input_code) + 17))
 
 for i in range(len(input_code)):
-    memory[i] = input_code[i].encode()[0]
+    memory[i] = input_codeord([i])
 
 output_directory = os.path.join(os.path.dirname(__file__), "bin")
 os.makedirs(output_directory, exist_ok=True)
@@ -205,12 +205,12 @@ def writeSection(writing_function: int, type: int, length: int, start: int) -> N
         index += 1
 
 def isWhiteSpace(index: int) -> int:
-    return memory[index] == ' '.encode()[0] or memory[index] == '\t'.encode()[0] or memory[index] == '\n'.encode()[0]
+    return memory[index] == ord(' ') or memory[index] == ord('\t') or memory[index] == ord('\n')
 
 def skipWhiteSpace(index: int) -> int:
     global CURRENT_LINE
     while True:
-        if memory[index] == '\n'.encode()[0]:
+        if memory[index] == ord('\n'):
             CURRENT_LINE = CURRENT_LINE + 1
         if not isWhiteSpace(index):
             break
@@ -218,11 +218,11 @@ def skipWhiteSpace(index: int) -> int:
     return index
 
 def isComment(index: int) -> int:
-    return memory[index] == ';'.encode()[0]
+    return memory[index] == ord(';')
 
 def skipComment(index: int) -> int:
     while True:
-        if memory[index] == '\n'.encode()[0]:
+        if memory[index] == ord('\n'):
             break
         index = index + 1
     return index
@@ -350,24 +350,24 @@ def error(index, value):
     print_string(s_eool_end)
 
     index_pointer = index
-    while memory[index_pointer] != '\n'.encode()[0]:
+    while memory[index_pointer] != ord('\n'):
         index_pointer -= 1
     index_pointer += 1
     start_of_line = index_pointer
     
-    print_char('\n'.encode()[0])
-    while memory[index_pointer] != '\n'.encode()[0]:
+    print_char(ord('\n'))
+    while memory[index_pointer] != ord('\n'):
         print_char(memory[index_pointer])
         index_pointer += 1
-    print_char('\n'.encode()[0])
+    print_char(ord('\n'))
     while start_of_line < index:
-        print_char(' '.encode()[0])
+        print_char(ord(' '))
         start_of_line += 1
     while not isWhiteSpace(start_of_line):
-        print_char('~'.encode()[0])
+        print_char(ord('~'))
         start_of_line += 1
-    print_char('\n'.encode()[0])
-    print_char('\n'.encode()[0])
+    print_char(ord('\n'))
+    print_char(ord('\n'))
 
     print_string(s_pf)
     exit_program(value)
@@ -413,12 +413,12 @@ def writeFromHex(index: int) -> int:
     while True:
         char = memory[index]
 
-        if char >= '0'.encode()[0] and char <= '9'.encode()[0]:
-            val = char - '0'.encode()[0]
-        elif char >= 'A'.encode()[0] and char <= 'F'.encode()[0]:
-            val = char - 'A'.encode()[0] + 10
-        elif char >= 'a'.encode()[0] and char <= 'f'.encode()[0]:
-            val = char - 'a'.encode()[0] + 10
+        if char >= ord('0') and char <= ord('9'):
+            val = char - ord('0')
+        elif char >= ord('A') and char <= ord('F'):
+            val = char - ord('A') + 10
+        elif char >= ord('a') and char <= ord('f'):
+            val = char - ord('a') + 10
         else:
             error(index, 0x01)
         
@@ -441,8 +441,8 @@ def writeFromBin(index: int) -> int:
     while True:
         char = memory[index]
 
-        if char == '0'.encode()[0] or char == '1'.encode()[0]:
-            val = char - '0'.encode()[0]
+        if char == ord('0') or char == ord('1'):
+            val = char - ord('0')
         else:
             error(index, 0x02)
         
@@ -473,10 +473,10 @@ def writeFromUleb(index: int) -> int:
 
     while True:
         
-        if memory[index] < '0'.encode()[0] or memory[index] > '9'.encode()[0]:
+        if memory[index] < ord('0') or memory[index] > ord('9'):
             error(index, 0x09)
 
-        digit = memory[index] - '0'.encode()[0]
+        digit = memory[index] - ord('0')
         result = result * 10 + digit
 
         index += 1
@@ -492,20 +492,20 @@ def writeFromSleb(index: int) -> int:
     negative = 0
     number = 0
 
-    if memory[index] == '-'.encode()[0]:
+    if memory[index] == ord('-'):
         negative = 1
         index += 1
 
-    if memory[index] < '0'.encode()[0] or memory[index] > '9'.encode()[0]:
+    if memory[index] < ord('0') or memory[index] > ord('9'):
         error(number_start, 0x08)
 
     while memory[index] != 0 and not isWhiteSpace(index):
         char = memory[index]
 
-        if char < '0'.encode()[0] or char > '9'.encode()[0]:
+        if char < ord('0') or char > ord('9'):
             error(index, 0x08)
 
-        number = number * 10 + char - '0'.encode()[0]
+        number = number * 10 + char - ord('0')
         index += 1
 
     if negative:
@@ -742,258 +742,258 @@ def parseCmd(index: int) -> int:
     type_arithmatic = 0
     type_comparison = 0
     type = 10
-    if memory[index] == 'i'.encode()[0] and memory[index + 1] == '3'.encode()[0] and memory[index + 2] == '2'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
+    if memory[index] == ord('i') and memory[index + 1] == ord('3') and memory[index + 2] == ord('2') and memory[index + 3] == ord('.'):
         type = 0x00
         type_arithmatic = i32_arithmatic
         type_comparison = i32_comparison
-    if memory[index] == 'i'.encode()[0] and memory[index + 1] == '6'.encode()[0] and memory[index + 2] == '4'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
+    if memory[index] == ord('i') and memory[index + 1] == ord('6') and memory[index + 2] == ord('4') and memory[index + 3] == ord('.'):
         type = 0x01
         type_arithmatic = i64_arithmatic
         type_comparison = i64_comparison
-    if memory[index] == 'f'.encode()[0] and memory[index + 1] == '3'.encode()[0] and memory[index + 2] == '2'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
+    if memory[index] == ord('f') and memory[index + 1] == ord('3') and memory[index + 2] == ord('2') and memory[index + 3] == ord('.'):
         type = 0x02
         type_arithmatic = f32_arithmatic
         type_comparison = f32_comparison
-    if memory[index] == 'f'.encode()[0] and memory[index + 1] == '6'.encode()[0] and memory[index + 2] == '4'.encode()[0] and memory[index + 3] == '.'.encode()[0]:
+    if memory[index] == ord('f') and memory[index + 1] == ord('6') and memory[index + 2] == ord('4') and memory[index + 3] == ord('.'):
         type = 0x03
         type_arithmatic = f64_arithmatic
         type_comparison = f64_comparison
 
     # control flow
-    if equals5(index, 'b'.encode()[0], 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'k'.encode()[0]):
+    if equals5(index, ord('b'), ord('l'), ord('o'), ord('c'), ord('k')):
         writeSectionChar(0x02)
         LABEL_SCOPE += 1
         return index + 5
-    if equals4(index, 'l'.encode()[0], 'o'.encode()[0], 'o'.encode()[0], 'p'.encode()[0]):
+    if equals4(index, ord('l'), ord('o'), ord('o'), ord('p')):
         writeSectionChar(0x03)
         LABEL_SCOPE += 1
         return index + 4
-    if equals2(index, 'i'.encode()[0], 'f'.encode()[0]):
+    if equals2(index, ord('i'), ord('f')):
         writeSectionChar(0x04)
         LABEL_SCOPE += 1
         return index + 2
-    if equals4(index, 'e'.encode()[0], 'l'.encode()[0], 's'.encode()[0], 'e'.encode()[0]):
+    if equals4(index, ord('e'), ord('l'), ord('s'), ord('e')):
         writeSectionChar(0x05)
         return index + 4
-    if equals3(index, 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
+    if equals3(index, ord('e'), ord('n'), ord('d')):
         writeSectionChar(0x0B)
         if LABEL_SCOPE > 0:
             LABEL_SCOPE -= 1
         return index + 3
-    if equals2(index, 'b'.encode()[0], 'r'.encode()[0]):
+    if equals2(index, ord('b'), ord('r')):
         writeSectionChar(0x0C)
         return index + 2
-    if equals5(index, 'b'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'i'.encode()[0], 'f'.encode()[0]):
+    if equals5(index, ord('b'), ord('r'), ord('_'), ord('i'), ord('f')):
         writeSectionChar(0x0D)
         return index + 5
-    if equals6(index, 'r'.encode()[0], 'e'.encode()[0], 't'.encode()[0], 'u'.encode()[0], 'r'.encode()[0], 'n'.encode()[0]):
+    if equals6(index, ord('r'), ord('e'), ord('t'), ord('u'), ord('r'), ord('n')):
         writeSectionChar(0x0F)
         return index + 6
     # functions
-    if equals4(index, 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], 'l'.encode()[0]):
+    if equals4(index, ord('c'), ord('a'), ord('l'), ord('l')):
         writeSectionChar(0x10)
         return index + 4
-    if equals13(index, 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], 'l'.encode()[0], '_'.encode()[0], 'i'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], 'i'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], 'c'.encode()[0], 't'.encode()[0]):
+    if equals13(index, ord('c'), ord('a'), ord('l'), ord('l'), ord('_'), ord('i'), ord('n'), ord('d'), ord('i'), ord('r'), ord('e'), ord('c'), ord('t')):
         writeSectionChar(0x11)
         return index + 13
     # stack
-    if equals4(index, 'd'.encode()[0], 'r'.encode()[0], 'o'.encode()[0], 'p'.encode()[0]):
+    if equals4(index, ord('d'), ord('r'), ord('o'), ord('p')):
         writeSectionChar(0x1A)
         return index + 4
     # locals
-    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 'g'.encode()[0], 'e'.encode()[0], 't'.encode()[0]):
+    if equals9(index, ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('.'), ord('g'), ord('e'), ord('t')):
         writeSectionChar(0x20)
         return index + 9
-    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 's'.encode()[0], 'e'.encode()[0], 't'.encode()[0]):
+    if equals9(index, ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('.'), ord('s'), ord('e'), ord('t')):
         writeSectionChar(0x21)
         return index + 9
-    if equals9(index, 'l'.encode()[0], 'o'.encode()[0], 'c'.encode()[0], 'a'.encode()[0], 'l'.encode()[0], '.'.encode()[0], 't'.encode()[0], 'e'.encode()[0], 'e'.encode()[0]):
+    if equals9(index, ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('.'), ord('t'), ord('e'), ord('e')):
         writeSectionChar(0x22)
         return index + 9
     # type specific instructions
     if type != 10: 
         index += 4
         # constants
-        if equals5(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 's'.encode()[0], 't'.encode()[0]):
+        if equals5(index, ord('c'), ord('o'), ord('n'), ord('s'), ord('t')):
             writeSectionChar(0x41 + type)
             return index + 5
         #arithmetic
-        if equals3(index, 'a'.encode()[0], 'd'.encode()[0], 'd'.encode()[0]):
+        if equals3(index, ord('a'), ord('d'), ord('d')):
             writeSectionChar(type_arithmatic + 0)
             return index + 3
-        if equals3(index, 's'.encode()[0], 'u'.encode()[0], 'b'.encode()[0]):
+        if equals3(index, ord('s'), ord('u'), ord('b')):
             writeSectionChar(type_arithmatic + 1)
             return index + 3
-        if equals3(index, 'm'.encode()[0], 'u'.encode()[0], 'l'.encode()[0]):
+        if equals3(index, ord('m'), ord('u'), ord('l')):
             writeSectionChar(type_arithmatic + 2)
             return index + 3
-        if equals5(index, 'd'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+        if equals5(index, ord('d'), ord('i'), ord('v'), ord('_'), ord('s')):
             writeSectionChar(type_arithmatic + 3)
             return index + 5
-        if equals5(index, 'd'.encode()[0], 'i'.encode()[0], 'v'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+        if equals5(index, ord('d'), ord('i'), ord('v'), ord('_'), ord('u')):
             writeSectionChar(type_arithmatic + 4)
             return index + 5
-        if equals5(index, 'r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+        if equals5(index, ord('r'), ord('e'), ord('m'), ord('_'), ord('s')):
             writeSectionChar(type_arithmatic + 5)
             return index + 5
-        if equals5(index, 'r'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+        if equals5(index, ord('r'), ord('e'), ord('m'), ord('_'), ord('u')):
             writeSectionChar(type_arithmatic + 6)
             return index + 5
-        if equals3(index, 'a'.encode()[0], 'n'.encode()[0], 'd'.encode()[0]):
+        if equals3(index, ord('a'), ord('n'), ord('d')):
             writeSectionChar(type_arithmatic + 7)
             return index + 3
-        if equals2(index, 'o'.encode()[0], 'r'.encode()[0]):
+        if equals2(index, ord('o'), ord('r')):
             writeSectionChar(type_arithmatic + 8)
             return index + 2
-        if equals3(index, 'x'.encode()[0], 'o'.encode()[0], 'r'.encode()[0]):
+        if equals3(index, ord('x'), ord('o'), ord('r')):
             writeSectionChar(type_arithmatic + 9)
             return index + 3
-        if equals3(index, 's'.encode()[0], 'h'.encode()[0], 'l'.encode()[0]):
+        if equals3(index, ord('s'), ord('h'), ord('l')):
             writeSectionChar(type_arithmatic + 10)
             return index + 3
-        if equals5(index, 's'.encode()[0], 'h'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+        if equals5(index, ord('s'), ord('h'), ord('r'), ord('_'), ord('s')):
             writeSectionChar(type_arithmatic + 11)
             return index + 5
-        if equals5(index, 's'.encode()[0], 'h'.encode()[0], 'r'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+        if equals5(index, ord('s'), ord('h'), ord('r'), ord('_'), ord('u')):
             writeSectionChar(type_arithmatic + 12)
             return index + 5
-        if equals4(index, 'r'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'l'.encode()[0]):
+        if equals4(index, ord('r'), ord('o'), ord('t'), ord('l')):
             writeSectionChar(type_arithmatic + 13)
             return index + 4
-        if equals4(index, 'r'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
+        if equals4(index, ord('r'), ord('o'), ord('t'), ord('r')):
             writeSectionChar(type_arithmatic + 14)
             return index + 4
         # comparisons
-        if (type == 0 or type == 1) and equals3(index, 'e'.encode()[0], 'q'.encode()[0], 'z'.encode()[0]):
+        if (type == 0 or type == 1) and equals3(index, ord('e'), ord('q'), ord('z')):
             writeSectionChar(type_comparison - 1)
             return index + 3
-        if equals2(index, 'e'.encode()[0], 'q'.encode()[0]):
+        if equals2(index, ord('e'), ord('q')):
             writeSectionChar(type_comparison + 0)
             return index + 2
-        if equals2(index, 'n'.encode()[0], 'e'.encode()[0]):
+        if equals2(index, ord('n'), ord('e')):
             writeSectionChar(type_comparison + 1)
             return index + 2
         if type == 0 or type == 1:
-            if equals4(index, 'l'.encode()[0], 't'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals4(index, ord('l'), ord('t'), ord('_'), ord('s')):
                 writeSectionChar(type_comparison + 2)
                 return index + 4
-            if equals4(index, 'l'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals4(index, ord('l'), ord('t'), ord('_'), ord('u')):
                 writeSectionChar(type_comparison + 3)
                 return index + 4
-            if equals4(index, 'g'.encode()[0], 't'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals4(index, ord('g'), ord('t'), ord('_'), ord('s')):
                 writeSectionChar(type_comparison + 4)
                 return index + 4
-            if equals4(index, 'g'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals4(index, ord('g'), ord('t'), ord('_'), ord('u')):
                 writeSectionChar(type_comparison + 5)
                 return index + 4
-            if equals4(index, 'l'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals4(index, ord('l'), ord('e'), ord('_'), ord('s')):
                 writeSectionChar(type_comparison + 6)
                 return index + 4
-            if equals4(index, 'l'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals4(index, ord('l'), ord('e'), ord('_'), ord('u')):
                 writeSectionChar(type_comparison + 7)
                 return index + 4
-            if equals4(index, 'g'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals4(index, ord('g'), ord('e'), ord('_'), ord('s')):
                 writeSectionChar(type_comparison + 8)
                 return index + 4
-            if equals4(index, 'g'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals4(index, ord('g'), ord('e'), ord('_'), ord('u')):
                 writeSectionChar(type_comparison + 9)
                 return index + 4
         if type == 2 or type == 3:
-            if equals2(index, 'l'.encode()[0], 't'.encode()[0]):
+            if equals2(index, ord('l'), ord('t')):
                 writeSectionChar(type_comparison + 2)
                 return index + 2
-            if equals2(index, 'g'.encode()[0], 't'.encode()[0]):
+            if equals2(index, ord('g'), ord('t')):
                 writeSectionChar(type_comparison + 3)
                 return index + 2
-            if equals2(index, 'l'.encode()[0], 'e'.encode()[0]):
+            if equals2(index, ord('l'), ord('e')):
                 writeSectionChar(type_comparison + 4)
                 return index + 2
-            if equals2(index, 'g'.encode()[0], 'e'.encode()[0]):
+            if equals2(index, ord('g'), ord('e')):
                 writeSectionChar(type_comparison + 5)
                 return index + 2
         # memory loads
-        if equals4(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0]):
+        if equals4(index, ord('l'), ord('o'), ord('a'), ord('d')):
             writeSectionChar(0x28 + type)
             return index + 4
         if type == 0 or type == 1:
-            if equals7(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '8'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals7(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('8'), ord('_'), ord('s')):
                 writeSectionChar(0x2C + type*4)
                 return index + 7
-            if equals7(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '8'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals7(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('8'), ord('_'), ord('u')):
                 writeSectionChar(0x2D + type*4)
                 return index + 7
-            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '1'.encode()[0], '6'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals8(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('1'), ord('6'), ord('_'), ord('s')):
                 writeSectionChar(0x2E + type*4)
                 return index + 8
-            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '1'.encode()[0], '6'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals8(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('1'), ord('6'), ord('_'), ord('u')):
                 writeSectionChar(0x2F + type*4)
                 return index + 8
         if type == 1:
-            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals8(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('3'), ord('2'), ord('_'), ord('s')):
                 writeSectionChar(0x34)
                 return index + 8
-            if equals8(index, 'l'.encode()[0], 'o'.encode()[0], 'a'.encode()[0], 'd'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals8(index, ord('l'), ord('o'), ord('a'), ord('d'), ord('3'), ord('2'), ord('_'), ord('u')):
                 writeSectionChar(0x35)
                 return index + 8
         # memory stores
-        if equals5(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0]):
+        if equals5(index, ord('s'), ord('t'), ord('o'), ord('r'), ord('e')):
             writeSectionChar(0x36 + type)
             return index + 5
         if type == 0 or type == 1:
-            if equals6(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '8'.encode()[0]):
+            if equals6(index, ord('s'), ord('t'), ord('o'), ord('r'), ord('e'), ord('8')):
                 writeSectionChar(0x3A + type*2)
                 return index + 6
-            if equals7(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '1'.encode()[0], '6'.encode()[0]):
+            if equals7(index, ord('s'), ord('t'), ord('o'), ord('r'), ord('e'), ord('1'), ord('6')):
                 writeSectionChar(0x3B + type*2)
                 return index + 7
         if type == 1:
-            if equals7(index, 's'.encode()[0], 't'.encode()[0], 'o'.encode()[0], 'r'.encode()[0], 'e'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+            if equals7(index, ord('s'), ord('t'), ord('o'), ord('r'), ord('e'), ord('3'), ord('2')):
                 writeSectionChar(0x3E)
                 return index + 7
         # conversions
         if type == 0:
-            if equals8(index, 'w'.encode()[0], 'r'.encode()[0], 'a'.encode()[0], 'p'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0]):
+            if equals8(index, ord('w'), ord('r'), ord('a'), ord('p'), ord('_'), ord('i'), ord('6'), ord('4')):
                 writeSectionChar(0xA7)
                 return index + 8
         if type == 1:
-            if equals12(index, 'e'.encode()[0], 'x'.encode()[0], 't'.encode()[0], 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals12(index, ord('e'), ord('x'), ord('t'), ord('e'), ord('n'), ord('d'), ord('_'), ord('i'), ord('3'), ord('2'), ord('_'), ord('s')):
                 writeSectionChar(0xAC)
                 return index + 12
-            if equals12(index, 'e'.encode()[0], 'x'.encode()[0], 't'.encode()[0], 'e'.encode()[0], 'n'.encode()[0], 'd'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals12(index, ord('e'), ord('x'), ord('t'), ord('e'), ord('n'), ord('d'), ord('_'), ord('i'), ord('3'), ord('2'), ord('_'), ord('u')):
                 writeSectionChar(0xAD)
                 return index + 12
         if type == 2:
-            if equals10(index, 'd'.encode()[0], 'e'.encode()[0], 'm'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0]):
+            if equals10(index, ord('d'), ord('e'), ord('m'), ord('o'), ord('t'), ord('e'), ord('_'), ord('f'), ord('6'), ord('4')):
                 writeSectionChar(0xB6)
                 return index + 10
         if type == 3:
-            if equals11(index, 'p'.encode()[0], 'r'.encode()[0], 'o'.encode()[0], 'm'.encode()[0], 'o'.encode()[0], 't'.encode()[0], 'e'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+            if equals11(index, ord('p'), ord('r'), ord('o'), ord('m'), ord('o'), ord('t'), ord('e'), ord('_'), ord('f'), ord('3'), ord('2')):
                 writeSectionChar(0xBB)
                 return index + 11
         if type == 0 or type == 1:
-            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals11(index, ord('t'), ord('r'), ord('u'), ord('n'), ord('c'), ord('_'), ord('f'), ord('3'), ord('2'), ord('_'), ord('s')):
                 writeSectionChar(0xA8 + type * 6)
                 return index + 11
-            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals11(index, ord('t'), ord('r'), ord('u'), ord('n'), ord('c'), ord('_'), ord('f'), ord('3'), ord('2'), ord('_'), ord('u')):
                 writeSectionChar(0xA9 + type * 6)
                 return index + 11
-            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals11(index, ord('t'), ord('r'), ord('u'), ord('n'), ord('c'), ord('_'), ord('f'), ord('6'), ord('4'), ord('_'), ord('s')):
                 writeSectionChar(0xAA + type * 6)
                 return index + 11
-            if equals11(index, 't'.encode()[0], 'r'.encode()[0], 'u'.encode()[0], 'n'.encode()[0], 'c'.encode()[0], '_'.encode()[0], 'f'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals11(index, ord('t'), ord('r'), ord('u'), ord('n'), ord('c'), ord('_'), ord('f'), ord('6'), ord('4'), ord('_'), ord('u')):
                 writeSectionChar(0xAB + type * 6)
                 return index + 11
         if type == 2 or type == 3:
-            if equals13(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals13(index, ord('c'), ord('o'), ord('n'), ord('v'), ord('e'), ord('r'), ord('t'), ord('_'), ord('i'), ord('3'), ord('2'), ord('_'), ord('s')):
                 writeSectionChar(0xB2 + (type - 2) * 5)
                 return index + 13
-            if equals13(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals13(index, ord('c'), ord('o'), ord('n'), ord('v'), ord('e'), ord('r'), ord('t'), ord('_'), ord('i'), ord('3'), ord('2'), ord('_'), ord('u')):
                 writeSectionChar(0xB3 + (type - 2) * 5)
                 return index + 13
-            if equals13(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 's'.encode()[0]):
+            if equals13(index, ord('c'), ord('o'), ord('n'), ord('v'), ord('e'), ord('r'), ord('t'), ord('_'), ord('i'), ord('6'), ord('4'), ord('_'), ord('s')):
                 writeSectionChar(0xB4 + (type - 2) * 5)
                 return index + 13
-            if equals13(index, 'c'.encode()[0], 'o'.encode()[0], 'n'.encode()[0], 'v'.encode()[0], 'e'.encode()[0], 'r'.encode()[0], 't'.encode()[0], '_'.encode()[0], 'i'.encode()[0], '6'.encode()[0], '4'.encode()[0], '_'.encode()[0], 'u'.encode()[0]):
+            if equals13(index, ord('c'), ord('o'), ord('n'), ord('v'), ord('e'), ord('r'), ord('t'), ord('_'), ord('i'), ord('6'), ord('4'), ord('_'), ord('u')):
                 writeSectionChar(0xB5 + (type - 2) * 5)
                 return index + 13
             
@@ -1009,29 +1009,29 @@ def parseWord(index: int) -> int:
     global LABEL_SCOPE
     global LABEL_FIRST_SYMBOL_ID
     global COUNT
-    if equals3(index, 'h'.encode()[0], 'e'.encode()[0], 'x'.encode()[0]):
+    if equals3(index, ord('h'), ord('e'), ord('x')):
         return writeFromHex(index + 3)
-    if equals3(index, 'b'.encode()[0], 'i'.encode()[0], 'n'.encode()[0]):
+    if equals3(index, ord('b'), ord('i'), ord('n')):
         return writeFromBin(index + 3)
-    if equals3(index, 's'.encode()[0], 't'.encode()[0], 'r'.encode()[0]):
+    if equals3(index, ord('s'), ord('t'), ord('r')):
         return writeFromString(index + 3)
-    if equals3(index, 'i'.encode()[0], '3'.encode()[0], '2'.encode()[0]):
+    if equals3(index, ord('i'), ord('3'), ord('2')):
         writeSectionChar(0x7F)
         return index + 3
-    if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
+    if equals4(index, ord('u'), ord('l'), ord('e'), ord('b')):
         return writeFromUleb(index + 4)
-    if equals4(index, 's'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
+    if equals4(index, ord('s'), ord('l'), ord('e'), ord('b')):
         return writeFromSleb(index + 4)
-    if equals5(index, 'a'.encode()[0], 's'.encode()[0], 'c'.encode()[0], 'i'.encode()[0], 'i'.encode()[0]):
+    if equals5(index, ord('a'), ord('s'), ord('c'), ord('i'), ord('i')):
         return writeFromAscii(index + 5)
-    if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
+    if equals7(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
         COUNT = 0
         return index + 7
-    if equals11(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+    if equals11(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('E'), ord('N'), ord('D')):
         writeSection(WRITING_TO_FUNCTION, CURRENT_SECTION, SECTION_BYTES_OUT - SECTION_LAST_BYTES_OUT, SECTION_LAST_BYTES_OUT)
         return index + 11
-    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'H'.encode()[0], 'E'.encode()[0], 'A'.encode()[0], 'D'.encode()[0], 'E'.encode()[0], 'R'.encode()[0]):
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('H'), ord('E'), ord('A'), ord('D'), ord('E'), ord('R')):
         write_char(0x00)
         write_char(0x61)
         write_char(0x73)
@@ -1041,65 +1041,65 @@ def parseWord(index: int) -> int:
         write_char(0x00)
         write_char(0x00)
         return index + 14
-    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'T'.encode()[0], 'Y'.encode()[0], 'P'.encode()[0], 'E'.encode()[0]):
+    if equals12(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('T'), ord('Y'), ord('P'), ord('E')):
         CURRENT_SECTION = 0x01
         return index + 12
-    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'I'.encode()[0], 'M'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('I'), ord('M'), ord('P'), ord('O'), ord('R'), ord('T')):
         CURRENT_SECTION = 0x02
         return index + 14
-    if equals16(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
+    if equals16(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         CURRENT_SECTION = 0x03
         return index + 16
-    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'M'.encode()[0], 'E'.encode()[0], 'M'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'Y'.encode()[0]):
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('M'), ord('E'), ord('M'), ord('O'), ord('R'), ord('Y')):
         CURRENT_SECTION = 0x05
         return index + 14
-    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'G'.encode()[0], 'L'.encode()[0], 'O'.encode()[0], 'B'.encode()[0], 'A'.encode()[0], 'L'.encode()[0]):
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('G'), ord('L'), ord('O'), ord('B'), ord('A'), ord('L')):
         CURRENT_SECTION = 0x06
         return index + 14
-    if equals14(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'X'.encode()[0], 'P'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('E'), ord('X'), ord('P'), ord('O'), ord('R'), ord('T')):
         CURRENT_SECTION = 0x07
         return index + 14
-    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'C'.encode()[0], 'O'.encode()[0], 'D'.encode()[0], 'E'.encode()[0]):
+    if equals12(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('C'), ord('O'), ord('D'), ord('E')):
         CURRENT_SECTION = 0x0A
         return index + 12
-    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'D'.encode()[0], 'A'.encode()[0], 'T'.encode()[0], 'A'.encode()[0]):
+    if equals12(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('D'), ord('A'), ord('T'), ord('A')):
         CURRENT_SECTION = 0x0B
         return index + 12
-    if equals8(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
+    if equals8(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         writeSectionChar(0x60)
         return index + 8
-    if equals13(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+    if equals13(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
         writeSectionChar(0x00)
         return index + 13
-    if equals11(index, 'M'.encode()[0], 'E'.encode()[0], 'M'.encode()[0], 'O'.encode()[0], 'R'.encode()[0], 'Y'.encode()[0], '_'.encode()[0], 'K'.encode()[0], 'I'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+    if equals11(index, ord('M'), ord('E'), ord('M'), ord('O'), ord('R'), ord('Y'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
         writeSectionChar(0x02)
         return index + 11
-    if equals14(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'S'.encode()[0], 'T'.encode()[0], 'A'.encode()[0], 'R'.encode()[0], 'T'.encode()[0]):
+    if equals14(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('S'), ord('T'), ord('A'), ord('R'), ord('T')):
         FUNCTION_LAST_BYTES_OUT = FUNCTION_BYTES_OUT
         WRITING_TO_FUNCTION = 1
         LABEL_SCOPE = 0
         LABEL_FIRST_SYMBOL_ID = LAST_SYMBOL_ID
         return index + 14
-    if equals12(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'E'.encode()[0], 'N'.encode()[0], 'D'.encode()[0]):
+    if equals12(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('E'), ord('N'), ord('D')):
         WRITING_TO_FUNCTION = 0
         writeSection(1, 0, FUNCTION_BYTES_OUT - FUNCTION_LAST_BYTES_OUT, FUNCTION_LAST_BYTES_OUT)
         LABEL_SCOPE = 0
         return index + 12
-    if equals9(index, 'N'.encode()[0], 'O'.encode()[0], '_'.encode()[0], 'R'.encode()[0], 'E'.encode()[0], 'T'.encode()[0], 'U'.encode()[0], 'R'.encode()[0], 'N'.encode()[0]):
+    if equals9(index, ord('N'), ord('O'), ord('_'), ord('R'), ord('E'), ord('T'), ord('U'), ord('R'), ord('N')):
         writeSectionChar(0x40)
         return index + 9
-    if equals5(index, 'C'.encode()[0], 'O'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'T'.encode()[0]):
+    if equals5(index, ord('C'), ord('O'), ord('U'), ord('N'), ord('T')):
         COUNT += 1
         return index + 5
     if isComment(index):
         return skipComment(index)
-    if memory[index] == '#'.encode()[0]:
+    if memory[index] == ord('#'):
         return setVariable(index + 1)
-    if memory[index] == '$'.encode()[0]:
+    if memory[index] == ord('$'):
         return getVariable(index + 1)
-    if memory[index] == '@'.encode()[0]:
+    if memory[index] == ord('@'):
         return setLabel(index + 1)
-    if memory[index] == '^'.encode()[0]:
+    if memory[index] == ord('^'):
         return getLabel(index + 1)
     if memory[index] == 0:
         return -67
