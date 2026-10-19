@@ -31,6 +31,8 @@ I will update the README as I progress through the project. Treat this almost as
     - [Python Assembler Equivalent](#python-assembler-equivalent)
     - [Implementing the Assembler in WebAsm](#implementing-the-assembler-in-webasm)
     - [Bootstrapping and Adding Versions](#bootstrapping-and-adding-versions)
+      - [assembler.0.3 - Error Handling](#assembler03---error-handling)
+      - [assembler.0.4 - Adding ascii keyword](#assembler04---adding-ascii-keyword)
 
 # Setting Up WebAsm
 
@@ -461,6 +463,10 @@ Right now, we want to be able to encode number and bytes in a bunch of different
 - `uleb` - Unsigned LEB128, e.g. `uleb 255` = 255
 - `str` - String, e.g. `str Hello` = 72 101 108 108 111
   - Remember usually the length of strings is required before the string, so use `uleb 3 str abc` to encode the string "abc" with the length of 3 before it.
+- `ascii` *[Added in assembler.0.4]* - Encodes a single ASCII character as a positive signed LEB128 value for instructions: `ascii a` = `97` but the bytes are `0xE1 0x00`.
+  - ASCII values below 64 use one byte; values from 64 through 127 require two bytes to preserve the positive sign.
+  - `str` writes raw bytes. For example, `str a` emits `0x61`, which `i32.const` interprets as `-31` because its immediate uses signed LEB128.
+  - Use `ascii` for character constants and `str` for raw string data, such as import and export names.
 
 ### Comments
 
@@ -800,7 +806,7 @@ writeFileSync(outputPath, Buffer.from(output));
 
 This is the only JavaScript neccissary to use the WebAsm Assembler, and the Python code has been completely seperated and is no longer apart of the tool chain. Each iteration I make upon the assembler will come from the previous assembler itself and not from any outside code.
 
-**Error Handling** assembler.0.3
+#### assembler.0.3 - Error Handling
 
 For any program, error handling and error messages are neccisary for ease of development. This will also add the need for `print_string` as another JavaScript import. The import will look like this: `function print_string(pointer: i32, length: i32) -> void`. Because strings will be passed as memory pointers, All strings will have to be set in memory before the program starts. So in the `main` entry function of the Assembly program, I will store all the strings and save their locations as variables using the `#` and `$` syntax in the assembler.
 
@@ -815,3 +821,21 @@ call $print_i32
      ~~~~~~~~~~
 Program Fault.
 ```
+
+#### assembler.0.4 - Adding ascii keyword
+
+So the current implementation for pushing a string character to the stack is as so:
+
+```
+i32.const uleb 128
+i32.const str [CHAR]
+i32.add
+```
+
+This is because of the way the `str` keyword is implemented. It was designed for the name of functions or exports in other sections, but when pushing to the stack in the CODE section, it doesn't give the correct value because of ULEB encoding. To encode the correct character, 128 needs to be added to it. This wastes a lot of space and I don't know why I didn't think of this earlier but adding the new `ascii` keyword will keep it from having to add 128 each time:
+
+```
+i32.const ascii [CHAR]
+```
+
+Also this updated optimized the assembler binary by removing unreachable code left over from assembler.0.1 made by ChatGPT. 

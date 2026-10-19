@@ -119,6 +119,8 @@ s_ihc_start = "Invalid hex character `"
 s_ihc_end = "`, valid characters (0-9 and A-F).\n"
 s_ibc_start = "Invalid binary character `"
 s_ibc_end = "`, valid characters (0 and 1).\n"
+s_iac_start = "Invalid ascii character `"
+s_iac_end = "`, Expected a single character with ascii value within 1-127.\n"
 s_sizilc_start = "Scope is zero invalid label call `"
 s_sizilc_end = "`.\n"
 s_ik_start = "Invalid keyword `"
@@ -284,7 +286,9 @@ def error(index, value):
         print_string(s_ldne_start, len(s_ldne_start))
     if value == 0x06:
         print_string(s_sizilc_start, len(s_sizilc_start))
-    if value >= 0x03 and value <= 0x06:
+    if value == 0x07:
+        print_string(s_iac_start, len(s_iac_start))
+    if value >= 0x03 and value <= 0x07:
         while not isWhiteSpace(index_pointer):
             print_char(memory[index_pointer])
             index_pointer += 1
@@ -296,7 +300,9 @@ def error(index, value):
         print_string(s_ldne_end, len(s_ldne_end))
     if value == 0x06:
         print_string(s_sizilc_end, len(s_sizilc_end))
-    if value > 0x06 or value < 0x01:
+    if value == 0x07:
+        print_string(s_iac_end, len(s_iac_end))
+    if value > 0x07 or value < 0x01:
         print_i32(value)
         print_string(s_ecind_end, len(s_ecind_end))
 
@@ -435,6 +441,24 @@ def writeFromUleb(index: int) -> int:
 
     writeByte(result)
     return index
+
+def writeFromAscii(index: int) -> int:
+    index = skipWhiteSpace(index)
+    char = memory[index]
+
+    if char > 127:
+        error(index, 0x07)
+
+    if memory[index + 1] != 0 and not isWhiteSpace(index + 1):
+        error(index, 0x07)
+
+    if char >= 64:
+        writeSectionChar(char | 0x80)
+        writeSectionChar(0)
+    else:
+        writeSectionChar(char)
+
+    return index + 1
 
 def setVariable(index: int) -> int:
     global LAST_SYMBOL_ID
@@ -921,6 +945,8 @@ def parseWord(index: int) -> int:
         return index + 3
     if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
         return writeFromUleb(index + 4)
+    if equals5(index, 'a'.encode()[0], 's'.encode()[0], 'c'.encode()[0], 'i'.encode()[0], 'i'.encode()[0]):
+        return writeFromAscii(index + 5)
     if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
         SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
         COUNT = 0

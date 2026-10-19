@@ -37,6 +37,10 @@ const instance = new WebAssembly.Instance(module, {
         print_i32: n => process.stdout.write(String(n)),
         print_char: n => process.stdout.write(String.fromCharCode(n)),
         write_char: n => output.push(n),
+        print_string: (pointer, length) => {
+            const bytes = new Uint8Array(instance.exports.memory.buffer, pointer, length);
+            process.stdout.write(Buffer.from(bytes).toString('ascii'));
+        },
         exit_program: n => {
           throw new Error('Assembler error ' + n);
         }

@@ -3,9 +3,9 @@
 ; The error function will now look like: `error(index: i32, value: i32) -> void`, adding the index parameter
 ; snippet from README on this version:
 ; PS D:\WebAsmCompiler> node Assembler/bin/run_wasm.js program.wasm
-; Error `1`: Variable `print_i32` does not exist.
+; Error `3`: Variable `print_i32` does not exist.
 ; Occured in Section `CODE`.
-; Error occured at on line `56`:
+; Error occured on line `56`.
 ;
 ; call $print_i32
 ;      ~~~~~~~~~~
@@ -33,11 +33,11 @@
 ; * s_ecind_start "Error Code `"
 ; * s_ecind_end "` is not defined.\n"
 ; * s_eool_start "Error occured on line `"
-; * s_eool_end "`:\n"					    
-; * s_ecind_start "Occured in Section `"
-; * s_ecind_end "`.\n"						****
+; * s_eool_end "`:\n"
+; * s_ois_start "Occured in Section `"
+; * s_ois_end "`.\n"						****
 ; * s_pf "Program Fault."
-;                                	*** and **** - these globals are identical and will point to the same memory 
+;                                	        **** - these globals are identical and will point to the same memory
 
 ; code below:
 
@@ -61,6 +61,37 @@
 #LABEL_FIRST_SYMBOL_ID 6324264
 #COUNT 6324268
 
+; Tracing and diagnostic strings, after mutable state and before the end of memory.
+#CURRENT_LINE 6324272
+#s_ei_start 6324276
+#s_ei_end 6324283
+#s_vdne_start 6324286
+#s_vdne_end 6324296
+#s_ihc_start 6324314
+#s_ihc_end 6324337
+#s_ibc_start 6324372
+#s_ibc_end 6324398
+#s_sizilc_start 6324429
+#s_sizilc_end 6324463
+#s_ik_start 6324466
+#s_ik_end 6324463
+#s_ldne_start 6324483
+#s_ldne_end 6324296
+#s_ecind_start 6324490
+#s_ecind_end 6324502
+#s_eool_start 6324520
+#s_eool_end 6324463
+#s_ois_start 6324543
+#s_ois_end 6324463
+#s_ois_TYPE 6324563
+#s_ois_IMPORT 6324567
+#s_ois_FUNCTION 6324573
+#s_ois_MEMORY 6324581
+#s_ois_GLOBAL 6324587
+#s_ois_EXPORT 6324593
+#s_ois_CODE 6324599
+#s_pf 6324603
+
 ; Input region ends where sectionMemory begins.
 #inputLimit 4194304
 
@@ -68,7 +99,7 @@ SECTION_HEADER
 SECTION SECTION_TYPE
 
 	; Number of distinct all-i32 signatures.
-	uleb 18
+	uleb 19
 
 	; Type 0: 1 i32 parameters, 0 i32 result.
 	FUNCTION uleb 1 i32 uleb 0
@@ -123,49 +154,53 @@ SECTION SECTION_TYPE
 
 	; Type 17: 0 i32 parameters, 0 i32 result.
 	FUNCTION uleb 0  uleb 0
+
+	; Type 18: 2 i32 parameters, 0 results (error and print_string).
+	FUNCTION uleb 2 i32 i32 uleb 0
 SECTION_END
 SECTION SECTION_IMPORT
-	uleb 4
+	uleb 5
 	uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND uleb 0
 	uleb 3 str env uleb 10 str print_char FUNCTION_KIND uleb 0
 	uleb 3 str env uleb 10 str write_char FUNCTION_KIND uleb 0
 	uleb 3 str env uleb 12 str exit_program FUNCTION_KIND uleb 0
+	uleb 3 str env uleb 12 str print_string FUNCTION_KIND uleb 18
 SECTION_END
 SECTION SECTION_FUNCTION
 	uleb 33
-	#f_writeSectionChar 4 uleb 0
-	#f_writeSection 5 uleb 1
-	#f_isWhiteSpace 6 uleb 2
-	#f_skipWhiteSpace 7 uleb 2
-	#f_isComment 8 uleb 2
-	#f_skipComment 9 uleb 2
-	#f_equals2 10 uleb 3
-	#f_equals3 11 uleb 4
-	#f_equals4 12 uleb 5
-	#f_equals5 13 uleb 6
-	#f_equals6 14 uleb 7
-	#f_equals7 15 uleb 8
-	#f_equals8 16 uleb 9
-	#f_equals9 17 uleb 10
-	#f_equals10 18 uleb 11
-	#f_equals11 19 uleb 12
-	#f_equals12 20 uleb 13
-	#f_equals13 21 uleb 14
-	#f_equals14 22 uleb 15
-	#f_equals16 23 uleb 16
-	#f_error 24 uleb 0
-	#f_writeByte 25 uleb 0
-	#f_writeFromHex 26 uleb 2
-	#f_writeFromBin 27 uleb 2
-	#f_writeFromString 28 uleb 2
-	#f_writeFromUleb 29 uleb 2
-	#f_setVariable 30 uleb 2
-	#f_getVariable 31 uleb 2
-	#f_setLabel 32 uleb 2
-	#f_getLabel 33 uleb 2
-	#f_parseCmd 34 uleb 2
-	#f_parseWord 35 uleb 2
-	#f_main 36 uleb 17
+	#f_writeSectionChar 5 uleb 0
+	#f_writeSection 6 uleb 1
+	#f_isWhiteSpace 7 uleb 2
+	#f_skipWhiteSpace 8 uleb 2
+	#f_isComment 9 uleb 2
+	#f_skipComment 10 uleb 2
+	#f_equals2 11 uleb 3
+	#f_equals3 12 uleb 4
+	#f_equals4 13 uleb 5
+	#f_equals5 14 uleb 6
+	#f_equals6 15 uleb 7
+	#f_equals7 16 uleb 8
+	#f_equals8 17 uleb 9
+	#f_equals9 18 uleb 10
+	#f_equals10 19 uleb 11
+	#f_equals11 20 uleb 12
+	#f_equals12 21 uleb 13
+	#f_equals13 22 uleb 14
+	#f_equals14 23 uleb 15
+	#f_equals16 24 uleb 16
+	#f_error 25 uleb 18
+	#f_writeByte 26 uleb 0
+	#f_writeFromHex 27 uleb 2
+	#f_writeFromBin 28 uleb 2
+	#f_writeFromString 29 uleb 2
+	#f_writeFromUleb 30 uleb 2
+	#f_setVariable 31 uleb 2
+	#f_getVariable 32 uleb 2
+	#f_setLabel 33 uleb 2
+	#f_getLabel 34 uleb 2
+	#f_parseCmd 35 uleb 2
+	#f_parseWord 36 uleb 2
+	#f_main 37 uleb 17
 SECTION_END
 SECTION SECTION_MEMORY
 	; One memory, minimum 97 pages, no declared maximum.
@@ -173,7 +208,7 @@ SECTION SECTION_MEMORY
 SECTION_END
 SECTION SECTION_EXPORT
 	uleb 2
-	uleb 4 str main FUNCTION_KIND uleb 36
+	uleb 4 str main FUNCTION_KIND $f_main
 	uleb 6 str memory uleb 2 uleb 0
 SECTION_END
 SECTION SECTION_CODE
@@ -513,6 +548,20 @@ SECTION SECTION_CODE
 				i32.const uleb 1
 				i32.eqz
 				br_if ^spaces_done
+
+				; Count each newline as it is consumed.
+				local.get $skipWhiteSpace_index
+				i32.load8_u uleb 0 uleb 0
+				i32.const uleb 10
+				i32.eq
+				if NO_RETURN
+				i32.const $CURRENT_LINE
+				i32.const $CURRENT_LINE
+				i32.load uleb 2 uleb 0
+				i32.const uleb 1
+				i32.add
+				i32.store uleb 2 uleb 0
+				end
 
 				; if not isWhiteSpace(index)
 				local.get $skipWhiteSpace_index
@@ -2106,52 +2155,390 @@ SECTION SECTION_CODE
 		end
 	FUNCTION_END
 
-	FUNCTION_START ; error(value)
+	FUNCTION_START ; error(index, value)
 
-		; extra locals = 0 (start at 0)
-		uleb 0
+		; Parameters are the failing source index and error code.
+		uleb 1 uleb 2 i32
+		#error_index 0
+		#error_value 1
+		#error_pointer 2
+		#error_line_start 3
 
-		; local names
-		#error_value 0
-
-		; print_char('E')
-		i32.const uleb 128
-		i32.const str E
-		i32.add
-		call uleb 1
-
-		; print_char('R')
-		i32.const uleb 128
-		i32.const str R
-		i32.add
-		call uleb 1
-
-		; print_char('R')
-		i32.const uleb 128
-		i32.const str R
-		i32.add
-		call uleb 1
-
-		; print_char('[')
-		i32.const uleb 128
-		i32.const str [
-		i32.add
-		call uleb 1
-
-		; print_i32(value)
+		i32.const $s_ei_start
+		i32.const uleb 7
+		call uleb 4
 		local.get $error_value
 		call uleb 0
+		i32.const $s_ei_end
+		i32.const uleb 3
+		call uleb 4
+		local.get $error_index
+		local.set $error_pointer
 
-		; print_char(']')
-		i32.const uleb 128
-		i32.const str ]
-		i32.add
+		; Diagnostic for error 1.
+		local.get $error_value
+		i32.const uleb 1
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ihc_start
+			i32.const uleb 23
+			call uleb 4
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			call uleb 1
+			i32.const $s_ihc_end
+			i32.const uleb 35
+			call uleb 4
+		end
+
+		; Diagnostic for error 2.
+		local.get $error_value
+		i32.const uleb 2
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ibc_start
+			i32.const uleb 26
+			call uleb 4
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			call uleb 1
+			i32.const $s_ibc_end
+			i32.const uleb 31
+			call uleb 4
+		end
+
+		; Diagnostic for error 3.
+		local.get $error_value
+		i32.const uleb 3
+		i32.eq
+		if NO_RETURN
+			i32.const $s_vdne_start
+			i32.const uleb 10
+			call uleb 4
+			block NO_RETURN @td3
+				loop NO_RETURN @tl3
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td3
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td3
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call uleb 1
+					local.get $error_pointer
+					i32.const uleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl3
+				end
+			end
+			i32.const $s_vdne_end
+			i32.const uleb 18
+			call uleb 4
+		end
+
+		; Diagnostic for error 4.
+		local.get $error_value
+		i32.const uleb 4
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ik_start
+			i32.const uleb 17
+			call uleb 4
+			block NO_RETURN @td4
+				loop NO_RETURN @tl4
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td4
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td4
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call uleb 1
+					local.get $error_pointer
+					i32.const uleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl4
+				end
+			end
+			i32.const $s_ik_end
+			i32.const uleb 3
+			call uleb 4
+		end
+
+		; Diagnostic for error 5.
+		local.get $error_value
+		i32.const uleb 5
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ldne_start
+			i32.const uleb 7
+			call uleb 4
+			block NO_RETURN @td5
+				loop NO_RETURN @tl5
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td5
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td5
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call uleb 1
+					local.get $error_pointer
+					i32.const uleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl5
+				end
+			end
+			i32.const $s_ldne_end
+			i32.const uleb 18
+			call uleb 4
+		end
+
+		; Diagnostic for error 6.
+		local.get $error_value
+		i32.const uleb 6
+		i32.eq
+		if NO_RETURN
+			i32.const $s_sizilc_start
+			i32.const uleb 34
+			call uleb 4
+			block NO_RETURN @td6
+				loop NO_RETURN @tl6
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td6
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td6
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call uleb 1
+					local.get $error_pointer
+					i32.const uleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl6
+				end
+			end
+			i32.const $s_sizilc_end
+			i32.const uleb 3
+			call uleb 4
+		end
+
+		; Unknown error codes still produce a complete diagnostic.
+		local.get $error_value
+		i32.const uleb 1
+		i32.lt_s
+		local.get $error_value
+		i32.const uleb 6
+		i32.gt_s
+		i32.or
+		if NO_RETURN
+			i32.const $s_ecind_start
+			i32.const uleb 12
+			call uleb 4
+			local.get $error_value
+			call uleb 0
+			i32.const $s_ecind_end
+			i32.const uleb 18
+			call uleb 4
+		end
+
+		i32.const $s_ois_start
+		i32.const uleb 20
+		call uleb 4
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 1
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_TYPE
+			i32.const uleb 4
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 2
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_IMPORT
+			i32.const uleb 6
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 3
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_FUNCTION
+			i32.const uleb 8
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 5
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_MEMORY
+			i32.const uleb 6
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 6
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_GLOBAL
+			i32.const uleb 6
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 7
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_EXPORT
+			i32.const uleb 6
+			call uleb 4
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const uleb 10
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_CODE
+			i32.const uleb 4
+			call uleb 4
+		end
+		i32.const $s_ois_end
+		i32.const uleb 3
+		call uleb 4
+		i32.const $s_eool_start
+		i32.const uleb 23
+		call uleb 4
+		i32.const $CURRENT_LINE
+		i32.load uleb 2 uleb 0
+		call uleb 0
+		i32.const $s_eool_end
+		i32.const uleb 3
+		call uleb 4
+
+		; Find the start of the source line without reading before address zero.
+		local.get $error_index
+		local.set $error_pointer
+		block NO_RETURN @sd
+			loop NO_RETURN @sl
+				local.get $error_pointer
+				i32.eqz
+				br_if ^sd
+				local.get $error_pointer
+				i32.const uleb 1
+				i32.sub
+				i32.load8_u uleb 0 uleb 0
+				i32.const uleb 10
+				i32.eq
+				br_if ^sd
+				local.get $error_pointer
+				i32.const uleb 1
+				i32.sub
+				local.set $error_pointer
+				br ^sl
+			end
+		end
+		local.get $error_pointer
+		local.set $error_line_start
+
+		; Print the complete line, including a final line without a newline.
+		i32.const uleb 10
+		call uleb 1
+		block NO_RETURN @ld
+			loop NO_RETURN @ll
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^ld
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				i32.const uleb 10
+				i32.eq
+				br_if ^ld
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				call uleb 1
+				local.get $error_pointer
+				i32.const uleb 1
+				i32.add
+				local.set $error_pointer
+				br ^ll
+			end
+		end
+		i32.const uleb 10
 		call uleb 1
 
-		; exit_program(value)
+		; Align the underline; preserve tabs to match the displayed source.
+		block NO_RETURN @pd
+			loop NO_RETURN @pl
+				local.get $error_line_start
+				local.get $error_index
+				i32.ge_u
+				br_if ^pd
+				local.get $error_line_start
+				i32.load8_u uleb 0 uleb 0
+				i32.const uleb 9
+				i32.eq
+				if i32
+					i32.const uleb 9
+				else
+					i32.const uleb 32
+				end
+				call uleb 1
+				local.get $error_line_start
+				i32.const uleb 1
+				i32.add
+				local.set $error_line_start
+				br ^pl
+			end
+		end
+		block NO_RETURN @underld
+			loop NO_RETURN @underll
+				local.get $error_line_start
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^underld
+				local.get $error_line_start
+				call $f_isWhiteSpace
+				br_if ^underld
+				i32.const uleb 128
+				i32.const str ~
+				i32.add
+				call uleb 1
+				local.get $error_line_start
+				i32.const uleb 1
+				i32.add
+				local.set $error_line_start
+				br ^underll
+			end
+		end
+		i32.const uleb 10
+		call uleb 1
+		i32.const uleb 10
+		call uleb 1
+		i32.const $s_pf
+		i32.const uleb 14
+		call uleb 4
 		local.get $error_value
 		call uleb 3
-		end
+	end
 	FUNCTION_END
 
 	FUNCTION_START ; writeByte(number)
@@ -2350,7 +2737,8 @@ SECTION SECTION_CODE
 							local.set $writeFromHex_val
 						else
 
-							; error(1)
+							; error(index, 1)
+							local.get $writeFromHex_index
 							i32.const uleb 1
 							call $f_error
 						end
@@ -2460,7 +2848,8 @@ SECTION SECTION_CODE
 					local.set $writeFromBin_val
 				else
 
-					; error(2)
+					; error(index, 2)
+					local.get $writeFromBin_index
 					i32.const uleb 2
 					call $f_error
 				end
@@ -2667,38 +3056,31 @@ SECTION SECTION_CODE
 		i32.const uleb 0
 		local.set $setVariable_result
 
-		; while true
+		; Read the symbol name.
 		block NO_RETURN @name_done
 			loop NO_RETURN @name_loop
-				i32.const uleb 1
+				; Stop before whitespace or the end of source.
+				local.get $setVariable_index
+				i32.load8_u uleb 0 uleb 0
 				i32.eqz
 				br_if ^name_done
+				local.get $setVariable_index
+				call $f_isWhiteSpace
+				br_if ^name_done
 
-				; variable_name_length += 1
+				; Advance the source index and name length together.
 				local.get $setVariable_variable_name_length
 				i32.const uleb 1
 				i32.add
 				local.set $setVariable_variable_name_length
-
-				; index += 1
 				local.get $setVariable_index
 				i32.const uleb 1
 				i32.add
 				local.set $setVariable_index
-
-				; if isWhiteSpace(index)
-				local.get $setVariable_index
-				call $f_isWhiteSpace
-				if NO_RETURN
-
-					; break
-					br ^name_done
-				end
-
-				; repeat
 				br ^name_loop
 			end
 		end
+
 
 		; index = skipWhiteSpace(index)
 		local.get $setVariable_index
@@ -2939,38 +3321,31 @@ SECTION SECTION_CODE
 		i32.const uleb 0
 		local.set $getVariable_stored_name_length
 
-		; while true
+		; Read the symbol name.
 		block NO_RETURN @name_done
 			loop NO_RETURN @name_loop
-				i32.const uleb 1
+				; Stop before whitespace or the end of source.
+				local.get $getVariable_index
+				i32.load8_u uleb 0 uleb 0
 				i32.eqz
 				br_if ^name_done
+				local.get $getVariable_index
+				call $f_isWhiteSpace
+				br_if ^name_done
 
-				; variable_name_length += 1
+				; Advance the source index and name length together.
 				local.get $getVariable_variable_name_length
 				i32.const uleb 1
 				i32.add
 				local.set $getVariable_variable_name_length
-
-				; index += 1
 				local.get $getVariable_index
 				i32.const uleb 1
 				i32.add
 				local.set $getVariable_index
-
-				; if isWhiteSpace(index)
-				local.get $getVariable_index
-				call $f_isWhiteSpace
-				if NO_RETURN
-
-					; break
-					br ^name_done
-				end
-
-				; repeat
 				br ^name_loop
 			end
 		end
+
 
 		; while vname_pointer < symbol_names_stack_index
 		block NO_RETURN @symbols_done
@@ -3179,7 +3554,8 @@ SECTION SECTION_CODE
 			end
 		end
 
-		; error(3)
+		; error(variable_name_start, 3)
+		local.get $getVariable_variable_name_start
 		i32.const uleb 3
 		call $f_error
 
@@ -3211,31 +3587,31 @@ SECTION SECTION_CODE
 		i32.const uleb 0
 		local.set $setLabel_loop_index
 
-		; while not isWhiteSpace(index)
+		; Read the symbol name.
 		block NO_RETURN @name_done
 			loop NO_RETURN @name_loop
+				; Stop before whitespace or the end of source.
 				local.get $setLabel_index
-				call $f_isWhiteSpace
-				i32.eqz
+				i32.load8_u uleb 0 uleb 0
 				i32.eqz
 				br_if ^name_done
+				local.get $setLabel_index
+				call $f_isWhiteSpace
+				br_if ^name_done
 
-				; label_length += 1
+				; Advance the source index and name length together.
 				local.get $setLabel_label_length
 				i32.const uleb 1
 				i32.add
 				local.set $setLabel_label_length
-
-				; index += 1
 				local.get $setLabel_index
 				i32.const uleb 1
 				i32.add
 				local.set $setLabel_index
-
-				; repeat
 				br ^name_loop
 			end
 		end
+
 
 		; if label_length == 0 or LABEL_SCOPE == 0
 		local.get $setLabel_label_length
@@ -3253,7 +3629,8 @@ SECTION SECTION_CODE
 		end
 		if NO_RETURN
 
-			; error(5)
+			; error(label_start, 5)
+			local.get $setLabel_label_start
 			i32.const uleb 5
 			call $f_error
 		end
@@ -3452,38 +3829,31 @@ SECTION SECTION_CODE
 		i32.const uleb 0
 		local.set $getLabel_matches
 
-		; while true
+		; Read the symbol name.
 		block NO_RETURN @name_done
 			loop NO_RETURN @name_loop
-				i32.const uleb 1
+				; Stop before whitespace or the end of source.
+				local.get $getLabel_index
+				i32.load8_u uleb 0 uleb 0
 				i32.eqz
 				br_if ^name_done
+				local.get $getLabel_index
+				call $f_isWhiteSpace
+				br_if ^name_done
 
-				; label_length += 1
+				; Advance the source index and name length together.
 				local.get $getLabel_label_length
 				i32.const uleb 1
 				i32.add
 				local.set $getLabel_label_length
-
-				; index += 1
 				local.get $getLabel_index
 				i32.const uleb 1
 				i32.add
 				local.set $getLabel_index
-
-				; if isWhiteSpace(index)
-				local.get $getLabel_index
-				call $f_isWhiteSpace
-				if NO_RETURN
-
-					; break
-					br ^name_done
-				end
-
-				; repeat
 				br ^name_loop
 			end
 		end
+
 
 		; while name_pointer < symbol_names_stack_index
 		block NO_RETURN @symbols_done
@@ -3685,7 +4055,8 @@ SECTION SECTION_CODE
 								i32.lt_s
 								if NO_RETURN
 
-									; error(6)
+									; error(label_start, 6)
+									local.get $getLabel_label_start
 									i32.const uleb 6
 									call $f_error
 								end
@@ -3722,8 +4093,9 @@ SECTION SECTION_CODE
 			end
 		end
 
-		; error(6)
-		i32.const uleb 6
+		; error(label_start, 5)
+		local.get $getLabel_label_start
+		i32.const uleb 5
 		call $f_error
 
 		; return 0
@@ -7834,7 +8206,8 @@ SECTION SECTION_CODE
 			return
 		end
 
-		; error(4)
+		; error(index, 4)
+		local.get $parseWord_index
 		i32.const uleb 4
 		call $f_error
 
@@ -7850,6 +8223,1633 @@ SECTION SECTION_CODE
 
 		; local names
 		#main_index 0
+
+		; Initialize diagnostic strings before parsing input or reporting errors.
+		; Each store uses the named string address plus a byte offset (0, 1, ...).
+		; Shared suffixes point to the same memory and are initialized only once.
+		; Adding 128 to str characters preserves positive ASCII i32 constants.
+
+		; s_ei_start = "Error `"
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ei_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ei_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 6
+
+		; s_ei_end = "`: "
+		i32.const $s_ei_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ei_end
+		i32.const uleb 58
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ei_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 2
+
+		; s_vdne_start = "Variable `"
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str V
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str b
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_vdne_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_vdne_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 9
+
+		; s_vdne_end = "` does not exist.\n"
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_vdne_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_vdne_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_vdne_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str x
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_vdne_end
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_vdne_end
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_vdne_end
+		i32.const uleb 10
+		i32.store8 uleb 0 uleb 17
+
+		; s_ihc_start = "Invalid hex character `"
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str I
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ihc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str h
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str x
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ihc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str h
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_ihc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_ihc_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 22
+
+		; s_ihc_end = "`, valid characters (0-9 and A-F).\n"
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ihc_end
+		i32.const uleb 44
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ihc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ihc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str h
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_ihc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_ihc_end
+		i32.const uleb 40
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_ihc_end
+		i32.const uleb 48
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_ihc_end
+		i32.const uleb 45
+		i32.store8 uleb 0 uleb 22
+		i32.const $s_ihc_end
+		i32.const uleb 57
+		i32.store8 uleb 0 uleb 23
+		i32.const $s_ihc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 24
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 25
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 26
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 27
+		i32.const $s_ihc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 28
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str A
+		i32.add
+		i32.store8 uleb 0 uleb 29
+		i32.const $s_ihc_end
+		i32.const uleb 45
+		i32.store8 uleb 0 uleb 30
+		i32.const $s_ihc_end
+		i32.const uleb 128
+		i32.const str F
+		i32.add
+		i32.store8 uleb 0 uleb 31
+		i32.const $s_ihc_end
+		i32.const uleb 41
+		i32.store8 uleb 0 uleb 32
+		i32.const $s_ihc_end
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 33
+		i32.const $s_ihc_end
+		i32.const uleb 10
+		i32.store8 uleb 0 uleb 34
+
+		; s_ibc_start = "Invalid binary character `"
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str I
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ibc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str b
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str y
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ibc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str h
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 22
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 23
+		i32.const $s_ibc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 24
+		i32.const $s_ibc_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 25
+
+		; s_ibc_end = "`, valid characters (0 and 1).\n"
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ibc_end
+		i32.const uleb 44
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ibc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ibc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str h
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_ibc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_ibc_end
+		i32.const uleb 40
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_ibc_end
+		i32.const uleb 48
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_ibc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 22
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 23
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 24
+		i32.const $s_ibc_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 25
+		i32.const $s_ibc_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 26
+		i32.const $s_ibc_end
+		i32.const uleb 49
+		i32.store8 uleb 0 uleb 27
+		i32.const $s_ibc_end
+		i32.const uleb 41
+		i32.store8 uleb 0 uleb 28
+		i32.const $s_ibc_end
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 29
+		i32.const $s_ibc_end
+		i32.const uleb 10
+		i32.store8 uleb 0 uleb 30
+
+		; s_sizilc_start = "Scope is zero invalid label call `"
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str S
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str p
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str z
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 22
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 23
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str b
+		i32.add
+		i32.store8 uleb 0 uleb 24
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 25
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 26
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 27
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 28
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 29
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 30
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 31
+		i32.const $s_sizilc_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 32
+		i32.const $s_sizilc_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 33
+
+		; s_sizilc_end = "`.\n"
+		i32.const $s_sizilc_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_sizilc_end
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_sizilc_end
+		i32.const uleb 10
+		i32.store8 uleb 0 uleb 2
+
+		; s_ik_start = "Invalid keyword `"
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str I
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str v
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ik_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str k
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str y
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str w
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ik_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ik_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 16
+
+		; s_ldne_start = "Label `"
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str L
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str b
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ldne_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ldne_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 6
+
+		; s_ecind_start = "Error Code `"
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ecind_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str C
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ecind_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ecind_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 11
+
+		; s_ecind_end = "` is not defined.\n"
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ecind_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str s
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ecind_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ecind_end
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str f
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ecind_end
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ecind_end
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ecind_end
+		i32.const uleb 10
+		i32.store8 uleb 0 uleb 17
+
+		; s_eool_start = "Error occured on line `"
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_eool_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str u
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_eool_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_eool_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 19
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 20
+		i32.const $s_eool_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 21
+		i32.const $s_eool_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 22
+
+		; s_ois_start = "Occured in Section `"
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str u
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str d
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ois_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_ois_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str S
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str e
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str c
+		i32.add
+		i32.store8 uleb 0 uleb 13
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 14
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str i
+		i32.add
+		i32.store8 uleb 0 uleb 15
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 16
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str n
+		i32.add
+		i32.store8 uleb 0 uleb 17
+		i32.const $s_ois_start
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 18
+		i32.const $s_ois_start
+		i32.const uleb 128
+		i32.const str `
+		i32.add
+		i32.store8 uleb 0 uleb 19
+
+		; s_ois_TYPE = "TYPE"
+		i32.const $s_ois_TYPE
+		i32.const uleb 128
+		i32.const str T
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_TYPE
+		i32.const uleb 128
+		i32.const str Y
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_TYPE
+		i32.const uleb 128
+		i32.const str P
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_TYPE
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 3
+
+		; s_ois_IMPORT = "IMPORT"
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str I
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str M
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str P
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str R
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_IMPORT
+		i32.const uleb 128
+		i32.const str T
+		i32.add
+		i32.store8 uleb 0 uleb 5
+
+		; s_ois_FUNCTION = "FUNCTION"
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str F
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str U
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str N
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str C
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str T
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str I
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_ois_FUNCTION
+		i32.const uleb 128
+		i32.const str N
+		i32.add
+		i32.store8 uleb 0 uleb 7
+
+		; s_ois_MEMORY = "MEMORY"
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str M
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str M
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str R
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_MEMORY
+		i32.const uleb 128
+		i32.const str Y
+		i32.add
+		i32.store8 uleb 0 uleb 5
+
+		; s_ois_GLOBAL = "GLOBAL"
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str G
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str L
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str B
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str A
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_GLOBAL
+		i32.const uleb 128
+		i32.const str L
+		i32.add
+		i32.store8 uleb 0 uleb 5
+
+		; s_ois_EXPORT = "EXPORT"
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str X
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str P
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str R
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_ois_EXPORT
+		i32.const uleb 128
+		i32.const str T
+		i32.add
+		i32.store8 uleb 0 uleb 5
+
+		; s_ois_CODE = "CODE"
+		i32.const $s_ois_CODE
+		i32.const uleb 128
+		i32.const str C
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_ois_CODE
+		i32.const uleb 128
+		i32.const str O
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_ois_CODE
+		i32.const uleb 128
+		i32.const str D
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_ois_CODE
+		i32.const uleb 128
+		i32.const str E
+		i32.add
+		i32.store8 uleb 0 uleb 3
+
+		; s_pf = "Program Fault."
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str P
+		i32.add
+		i32.store8 uleb 0 uleb 0
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 1
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str o
+		i32.add
+		i32.store8 uleb 0 uleb 2
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str g
+		i32.add
+		i32.store8 uleb 0 uleb 3
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str r
+		i32.add
+		i32.store8 uleb 0 uleb 4
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 5
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str m
+		i32.add
+		i32.store8 uleb 0 uleb 6
+		i32.const $s_pf
+		i32.const uleb 32
+		i32.store8 uleb 0 uleb 7
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str F
+		i32.add
+		i32.store8 uleb 0 uleb 8
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str a
+		i32.add
+		i32.store8 uleb 0 uleb 9
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str u
+		i32.add
+		i32.store8 uleb 0 uleb 10
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str l
+		i32.add
+		i32.store8 uleb 0 uleb 11
+		i32.const $s_pf
+		i32.const uleb 128
+		i32.const str t
+		i32.add
+		i32.store8 uleb 0 uleb 12
+		i32.const $s_pf
+		i32.const uleb 46
+		i32.store8 uleb 0 uleb 13
+
+		; Line numbers start at 1 on every call to main.
+		i32.const $CURRENT_LINE
+		i32.const uleb 1
+		i32.store uleb 2 uleb 0
 
 		; reset assembler state
 		i32.const $SECTION_BYTES_OUT
