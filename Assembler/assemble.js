@@ -38,8 +38,15 @@ const instance = new WebAssembly.Instance(module, {
         print_char: n => process.stdout.write(String.fromCharCode(n)),
         write_char: n => output.push(n),
         print_string: (pointer, length) => {
-            const bytes = new Uint8Array(instance.exports.memory.buffer, pointer, length);
-            process.stdout.write(Buffer.from(bytes).toString('ascii'));
+            const memory = new Uint8Array(instance.exports.memory.buffer);
+            // Older assemblers pass a length; 0.6 uses a zero terminator.
+            if (length === undefined) {
+                let end = pointer;
+                while (end < memory.length && memory[end] !== 0)
+                    end++;
+                length = end - pointer;
+            }
+            process.stdout.write(Buffer.from(memory.subarray(pointer, pointer + length)).toString('ascii'));
         },
         exit_program: n => {
           throw new Error('Assembler error ' + n);

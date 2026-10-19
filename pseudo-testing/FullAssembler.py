@@ -59,10 +59,9 @@ def print_i32(value): # import
 def print_char(value): # import
     print(chr(value), end='')
 
-def print_string(pointer: (int|str), _length: int): # import
+def print_string(pointer: (int|str)):
     print(pointer, end='')
-    # this is not real implementation of print_string, because strings in the WebAsm assembler are stored in memory
-    # because this python assembler is like this, we can just use the "pointer" and not use the length
+    # this is not real implementation of print_string, because strings in the WebAsm assembley
     # the parameter `pointer` is not actually a pointer at all in this python context, it is a python str object. 
 
 def write_char(char): # import
@@ -111,39 +110,41 @@ LABEL_FIRST_SYMBOL_ID = 0 # global; labels from earlier functions are invalid
 CURRENT_LINE = 1 # global
 
 # Strings
-s_ei_start = "Error `"
-s_ei_end = "`: "
-s_vdne_start = "Variable `"
-s_vdne_end = "` does not exist.\n"
-s_ihc_start = "Invalid hex character `"
-s_ihc_end = "`, valid characters (0-9 and A-F).\n"
-s_ibc_start = "Invalid binary character `"
-s_ibc_end = "`, valid characters (0 and 1).\n"
-s_iac_start = "Invalid ascii character `"
-s_iac_end = "`, Expected a single character with ascii value within 1-127.\n"
-s_ise_start = "Invalid SLEB 128 encoding `"
-s_ise_end = "`, valid characters are 0-9 and `-` and expected atleast 1 digit after `-`.\n"
-s_sizilc_start = "Scope is zero invalid label call `"
-s_sizilc_end = "`.\n"
-s_ik_start = "Invalid keyword `"
-s_ik_end = "`.\n"
-s_ldne_start = "Label `"
-s_ldne_end = "` does not exist.\n"
-s_ecind_start = "Error Code `"
-s_ecind_end = "` is not defined.\n"
-s_eool_start = "Error occured on line `"
-s_eool_end = "`.\n"
-s_ois_start = "Occured in Section `"
-s_ois_end = "`.\n"
-s_ois_TYPE = "TYPE"
-s_ois_IMPORT = "IMPORT"
-s_ois_FUNCTION = "FUNCTION"
-s_ois_MEMORY = "MEMORY"
-s_ois_GLOBAL = "GLOBAL"
-s_ois_EXPORT = "EXPORT"
-s_ois_CODE = "CODE"
-s_ois_DATA = "DATA"
-s_pf = "Program Fault."
+s_ei_start = "Error `\0"
+s_ei_end = "`: \0"
+s_vdne_start = "Variable `\0"
+s_vdne_end = "` does not exist.\n\0"
+s_ihc_start = "Invalid hex character `\0"
+s_ihc_end = "`, valid characters (0-9 and A-F).\n\0"
+s_ibc_start = "Invalid binary character `\0"
+s_ibc_end = "`, valid characters (0 and 1).\n\0"
+s_iuc_start = "Invalid uleb character `\0"
+s_iuc_end = "`, valid characters (0-9).\n\0"
+s_iac_start = "Invalid ascii character `\0"
+s_iac_end = "`, Expected a single character with ascii value within 1-127.\n\0"
+s_ise_start = "Invalid SLEB 128 encoding `\0"
+s_ise_end = "`, valid characters are (0-9 and '-') and expected atleast 1 digit after '-'.\n\0"
+s_sizilc_start = "Scope is zero invalid label call `\0"
+s_sizilc_end = "`.\n\0"
+s_ik_start = "Invalid keyword `\0"
+s_ik_end = "`.\n\0"
+s_ldne_start = "Label `\0"
+s_ldne_end = "` does not exist.\n\0"
+s_ecind_start = "Error Code `\0"
+s_ecind_end = "` is not defined.\n\0"
+s_eool_start = "Error occured on line `\0"
+s_eool_end = "`.\n\0"
+s_ois_start = "Occured in Section `\0"
+s_ois_end = "`.\n\0"
+s_ois_TYPE = "TYPE\0"
+s_ois_IMPORT = "IMPORT\0"
+s_ois_FUNCTION = "FUNCTION\0"
+s_ois_MEMORY = "MEMORY\0"
+s_ois_GLOBAL = "GLOBAL\0"
+s_ois_EXPORT = "EXPORT\0"
+s_ois_CODE = "CODE\0"
+s_ois_DATA = "DATA\0"
+s_pf = "Program Fault.\0"
 
 def writeSectionChar(char: int) -> None:
     global SECTION_BYTES_OUT
@@ -269,72 +270,84 @@ def equals16(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and memory[index + 14] == c15 and memory[index + 15] == c16 and isWhiteSpace(index + 16)
 
 def error(index, value):
-    print_string(s_ei_start, len(s_ei_start))
+    print_string(s_ei_start)
     print_i32(value)
-    print_string(s_ei_end, len(s_ei_end))
+    print_string(s_ei_end)
     index_pointer = index
     if value == 0x01:
-        print_string(s_ihc_start, len(s_ihc_start))
+        print_string(s_ihc_start)
         print_char(memory[index_pointer])
-        print_string(s_ihc_end, len(s_ihc_end))
+        print_string(s_ihc_end)
     if value == 0x02:
-        print_string(s_ibc_start, len(s_ibc_start))
+        print_string(s_ibc_start)
         print_char(memory[index_pointer])
-        print_string(s_ibc_end, len(s_ibc_end))
+        print_string(s_ibc_end)
     if value == 0x03:
-        print_string(s_vdne_start, len(s_vdne_start))
-    if value == 0x04:
-        print_string(s_ik_start, len(s_ik_start))
-    if value == 0x05:
-        print_string(s_ldne_start, len(s_ldne_start))
-    if value == 0x06:
-        print_string(s_sizilc_start, len(s_sizilc_start))
-    if value == 0x07:
-        print_string(s_iac_start, len(s_iac_start))
-    if value == 0x08:
-        print_string(s_ise_start, len(s_ise_start))
-    if value >= 0x03 and value <= 0x08:
+        print_string(s_vdne_start)
         while not isWhiteSpace(index_pointer):
             print_char(memory[index_pointer])
             index_pointer += 1
-    if value == 0x03:
-        print_string(s_vdne_end, len(s_vdne_end))
+        print_string(s_vdne_end)
     if value == 0x04:
-        print_string(s_ik_end, len(s_ik_end))
+        print_string(s_ik_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_ik_end)
     if value == 0x05:
-        print_string(s_ldne_end, len(s_ldne_end))
+        print_string(s_ldne_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_ldne_end)
     if value == 0x06:
-        print_string(s_sizilc_end, len(s_sizilc_end))
+        print_string(s_sizilc_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_sizilc_end)
     if value == 0x07:
-        print_string(s_iac_end, len(s_iac_end))
+        print_string(s_iac_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_iac_end)
     if value == 0x08:
-        print_string(s_ise_end, len(s_ise_end))
-    if value > 0x08 or value < 0x01:
+        print_string(s_ise_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_ise_end)
+    if value == 0x09:
+        print_string(s_iuc_start)
+        print_char(memory[index_pointer])
+        print_string(s_iuc_end)
+    if value > 0x09 or value < 0x01:
         print_i32(value)
-        print_string(s_ecind_end, len(s_ecind_end))
+        print_string(s_ecind_end)
 
-    print_string(s_ois_start, len(s_ois_start))
+    print_string(s_ois_start)
     if CURRENT_SECTION == 0x01:
-        print_string(s_ois_TYPE, len(s_ois_TYPE))
+        print_string(s_ois_TYPE)
     if CURRENT_SECTION == 0x02:
-        print_string(s_ois_IMPORT, len(s_ois_IMPORT))
+        print_string(s_ois_IMPORT)
     if CURRENT_SECTION == 0x03:
-        print_string(s_ois_FUNCTION, len(s_ois_FUNCTION))
+        print_string(s_ois_FUNCTION)
     if CURRENT_SECTION == 0x05:
-        print_string(s_ois_MEMORY, len(s_ois_MEMORY))
+        print_string(s_ois_MEMORY)
     if CURRENT_SECTION == 0x06:
-        print_string(s_ois_GLOBAL, len(s_ois_GLOBAL))
+        print_string(s_ois_GLOBAL)
     if CURRENT_SECTION == 0x07:
-        print_string(s_ois_EXPORT, len(s_ois_EXPORT))
+        print_string(s_ois_EXPORT)
     if CURRENT_SECTION == 0x0A:
-        print_string(s_ois_CODE, len(s_ois_CODE))
+        print_string(s_ois_CODE)
     if CURRENT_SECTION == 0x0B:
-        print_string(s_ois_DATA, len(s_ois_DATA))
-    print_string(s_ois_end, len(s_ois_end))
+        print_string(s_ois_DATA)
+    print_string(s_ois_end)
         
-    print_string(s_eool_start, len(s_eool_start))
+    print_string(s_eool_start)
     print_i32(CURRENT_LINE)
-    print_string(s_eool_end, len(s_eool_end))
+    print_string(s_eool_end)
 
     index_pointer = index
     while memory[index_pointer] != '\n'.encode()[0]:
@@ -356,7 +369,7 @@ def error(index, value):
     print_char('\n'.encode()[0])
     print_char('\n'.encode()[0])
 
-    print_string(s_pf, len(s_pf))
+    print_string(s_pf)
     exit_program(value)
 
 def writeByte(number: int):
@@ -459,6 +472,10 @@ def writeFromUleb(index: int) -> int:
     digit = 0
 
     while True:
+        
+        if memory[index] < '0'.encode()[0] or memory[index] > '9'.encode()[0]:
+            error(index, 0x09)
+
         digit = memory[index] - '0'.encode()[0]
         result = result * 10 + digit
 

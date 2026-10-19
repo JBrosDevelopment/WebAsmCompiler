@@ -35,6 +35,7 @@ I will update the README as I progress through the project. Treat this almost as
       - [assembler.0.3 - Error Handling](#assembler03---error-handling)
       - [assembler.0.4 - Adding ascii keyword](#assembler04---adding-ascii-keyword)
       - [assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler)
+      - [assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`](#assembler06---added-strings-to-data-section-fixed-bug-by-adding-error-message-and-optimized-assembler-with-sleb)
 
 # Setting Up WebAsm
 
@@ -872,3 +873,25 @@ The `sleb` keyword will encode a value according to the Signed LEB128 format. Th
 The way strings are implemented is a bunch of addresses and in the main function setting the values in these a addresses to their corresponding characters. This is unnecessary and the better thing to do is to set these strings in memory. To fix this I'll add the DATA Section to the assembler. The [specs of this section can be found above](#data-section-added-in-assembler05). The next update I'll make it actually add the strings to the DATA section. This update will be for the implementation of it.
 
 The next thing is implementing the `ascii` keyword into the assembler to optimize the binary, saving a lot of space.
+
+#### assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`
+
+This update is implementing the changes brought up in the previous updates into the assembler. Moving Strings to the DATA section To optimze the size of the binary and the efficiency of the `main` function. I will also change the strings to be null terminated instead of printing by length. This means changing `print_string(ptr, length)` to `print_string(ptr)`. This function will print characters until it reaches the `\0` character.
+
+Currently when encoding a uleb number, if the input is not 0-9 there is no error warning, and it will crash at runtime. To fix this, in the `writeFromUleb`, check to make sure the input is within the digits 0-9. 
+
+There are a few times in the code when trying to encde a specific value that the limitations of uleb encoding occur when the value was expected to be in SLEB 128 format. For example in the code:
+
+```
+i32.const uleb 128
+i32.const uleb 52
+i32.sub
+```
+
+could be shortened to:
+
+```
+i32.const sleb 76
+```
+
+To encode the correct number.
