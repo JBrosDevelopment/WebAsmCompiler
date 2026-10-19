@@ -121,6 +121,8 @@ s_ibc_start = "Invalid binary character `"
 s_ibc_end = "`, valid characters (0 and 1).\n"
 s_iac_start = "Invalid ascii character `"
 s_iac_end = "`, Expected a single character with ascii value within 1-127.\n"
+s_ise_start = "Invalid SLEB 128 encoding `"
+s_ise_end = "`, valid characters are 0-9 and `-` and expected atleast 1 digit after `-`.\n"
 s_sizilc_start = "Scope is zero invalid label call `"
 s_sizilc_end = "`.\n"
 s_ik_start = "Invalid keyword `"
@@ -140,6 +142,7 @@ s_ois_MEMORY = "MEMORY"
 s_ois_GLOBAL = "GLOBAL"
 s_ois_EXPORT = "EXPORT"
 s_ois_CODE = "CODE"
+s_ois_DATA = "DATA"
 s_pf = "Program Fault."
 
 def writeSectionChar(char: int) -> None:
@@ -288,7 +291,9 @@ def error(index, value):
         print_string(s_sizilc_start, len(s_sizilc_start))
     if value == 0x07:
         print_string(s_iac_start, len(s_iac_start))
-    if value >= 0x03 and value <= 0x07:
+    if value == 0x08:
+        print_string(s_ise_start, len(s_ise_start))
+    if value >= 0x03 and value <= 0x08:
         while not isWhiteSpace(index_pointer):
             print_char(memory[index_pointer])
             index_pointer += 1
@@ -302,7 +307,9 @@ def error(index, value):
         print_string(s_sizilc_end, len(s_sizilc_end))
     if value == 0x07:
         print_string(s_iac_end, len(s_iac_end))
-    if value > 0x07 or value < 0x01:
+    if value == 0x08:
+        print_string(s_ise_end, len(s_ise_end))
+    if value > 0x08 or value < 0x01:
         print_i32(value)
         print_string(s_ecind_end, len(s_ecind_end))
 
@@ -321,6 +328,8 @@ def error(index, value):
         print_string(s_ois_EXPORT, len(s_ois_EXPORT))
     if CURRENT_SECTION == 0x0A:
         print_string(s_ois_CODE, len(s_ois_CODE))
+    if CURRENT_SECTION == 0x0B:
+        print_string(s_ois_DATA, len(s_ois_DATA))
     print_string(s_ois_end, len(s_ois_end))
         
     print_string(s_eool_start, len(s_eool_start))
@@ -363,6 +372,24 @@ def writeByte(number: int):
             byte |= 0x80
         writeSectionChar(byte)
         number = number >> 7
+
+def writeSignedByte(number: int):
+    while True:
+        byte = number & 0x7F
+        number >>= 7
+
+        finished = (
+            (number == 0 and (byte & 0x40) == 0) or
+            (number == -1 and (byte & 0x40) != 0)
+        )
+
+        if not finished:
+            byte |= 0x80
+
+        writeSectionChar(byte)
+
+        if finished:
+            return
 
 def writeFromHex(index: int) -> int:
     index = skipWhiteSpace(index)
@@ -440,6 +467,37 @@ def writeFromUleb(index: int) -> int:
             break
 
     writeByte(result)
+    return index
+
+def writeFromSleb(index: int) -> int:
+    index = skipWhiteSpace(index)
+    number_start = index
+    negative = 0
+    number = 0
+
+    if memory[index] == '-'.encode()[0]:
+        negative = 1
+        index += 1
+
+    if memory[index] < '0'.encode()[0] or memory[index] > '9'.encode()[0]:
+        error(number_start, 0x08)
+
+    while memory[index] != 0 and not isWhiteSpace(index):
+        char = memory[index]
+
+        if char < '0'.encode()[0] or char > '9'.encode()[0]:
+            error(index, 0x08)
+
+        number = number * 10 + char - '0'.encode()[0]
+        index += 1
+
+    if negative:
+        number = -number
+
+    if number < -2147483648 or number > 2147483647:
+        error(number_start, 0x04)
+
+    writeSignedByte(number)
     return index
 
 def writeFromAscii(index: int) -> int:
@@ -945,6 +1003,8 @@ def parseWord(index: int) -> int:
         return index + 3
     if equals4(index, 'u'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
         return writeFromUleb(index + 4)
+    if equals4(index, 's'.encode()[0], 'l'.encode()[0], 'e'.encode()[0], 'b'.encode()[0]):
+        return writeFromSleb(index + 4)
     if equals5(index, 'a'.encode()[0], 's'.encode()[0], 'c'.encode()[0], 'i'.encode()[0], 'i'.encode()[0]):
         return writeFromAscii(index + 5)
     if equals7(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
@@ -984,6 +1044,9 @@ def parseWord(index: int) -> int:
         return index + 14
     if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'C'.encode()[0], 'O'.encode()[0], 'D'.encode()[0], 'E'.encode()[0]):
         CURRENT_SECTION = 0x0A
+        return index + 12
+    if equals12(index, 'S'.encode()[0], 'E'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0], '_'.encode()[0], 'D'.encode()[0], 'A'.encode()[0], 'T'.encode()[0], 'A'.encode()[0]):
+        CURRENT_SECTION = 0x0B
         return index + 12
     if equals8(index, 'F'.encode()[0], 'U'.encode()[0], 'N'.encode()[0], 'C'.encode()[0], 'T'.encode()[0], 'I'.encode()[0], 'O'.encode()[0], 'N'.encode()[0]):
         writeSectionChar(0x60)

@@ -28,11 +28,13 @@ I will update the README as I progress through the project. Treat this almost as
     - [GLOBAL Section](#global-section)
     - [EXPORT Section](#export-section)
     - [CODE Section](#code-section)
+    - [DATA Section *\[Added in Assembler.0.5\]*](#data-section-added-in-assembler05)
     - [Python Assembler Equivalent](#python-assembler-equivalent)
     - [Implementing the Assembler in WebAsm](#implementing-the-assembler-in-webasm)
     - [Bootstrapping and Adding Versions](#bootstrapping-and-adding-versions)
       - [assembler.0.3 - Error Handling](#assembler03---error-handling)
       - [assembler.0.4 - Adding ascii keyword](#assembler04---adding-ascii-keyword)
+      - [assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler)
 
 # Setting Up WebAsm
 
@@ -505,6 +507,7 @@ This will allow the assembler to start counting bytes when it sees the `SECTION`
 - `SECTION_GLOBAL` - Global Section -> Converts to `0x06`
 - `SECTION_EXPORT` - Export Section -> Converts to `0x07`
 - `SECTION_CODE` - Code Section -> Converts to `0x0A`
+- `SECTION_DATA` *[Added in assembler.0.5]* - Data Section -> Converts to `0x0B`
 
 More might come later but these are the main sections we'll use for now.
 
@@ -629,6 +632,28 @@ SECTION_END
 You can view the opcodes for the above code in the [Opcodes.md](Opcodes.md) file.
 
 The `@` and the `^` are used to define and reference labels for the `block`, `loop`, and `br_if` opcodes. The `@block1` and `@loop1` are labels that can be used to reference the block and loop, and the `^block1` is used to reference the block when using the `br_if` opcode. This is to make it easier to use brances in the language instead of counting the depth.
+
+### DATA Section [*[Added in Assembler.0.5]*](#assembler05---adding-sleb-keyword-changing-constant-strings-and-optimizing-assembler)
+
+This section was added in assembler.0.5 update. In this section you can define values to be stored in memory during initialization before the code gets executed. This is useful especially for strings. 
+
+```
+SECTION SECTION_DATA
+	<count>
+
+	<0 = active, 1 = passive>
+	<destination address defined through `i32.const` and `end`>
+	<bytes length>
+	<data raw bytes>
+	
+    ; example
+    uleb 0
+	i32.const $destination end
+	uleb 12
+	str Hello hex 20 str World!
+
+SECTION_END
+```
 
 ### Python Assembler Equivalent
 
@@ -839,3 +864,11 @@ i32.const ascii [CHAR]
 ```
 
 Also this updated optimized the assembler binary by removing unreachable code left over from assembler.0.1 made by ChatGPT. 
+
+#### assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler
+
+The `sleb` keyword will encode a value according to the Signed LEB128 format. This will be neccisary for when operations like `i32.const` which expect the value to be in Signed LEB 128 format. This just makes everything more convienent and it should have been implemented earlier.
+
+The way strings are implemented is a bunch of addresses and in the main function setting the values in these a addresses to their corresponding characters. This is unnecessary and the better thing to do is to set these strings in memory. To fix this I'll add the DATA Section to the assembler. The [specs of this section can be found above](#data-section-added-in-assembler05). The next update I'll make it actually add the strings to the DATA section. This update will be for the implementation of it.
+
+The next thing is implementing the `ascii` keyword into the assembler to optimize the binary, saving a lot of space.
