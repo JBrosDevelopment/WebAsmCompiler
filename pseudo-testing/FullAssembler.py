@@ -6,17 +6,21 @@ SECTION_HEADER
 
 SECTION SECTION_TYPE
 COUNT FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
-COUNT FUNCTION uleb 0 uleb 0 #main_type 1
-COUNT FUNCTION uleb 1 i32 uleb 1 i32 #double_type 2
+COUNT FUNCTION uleb 1 f32 uleb 0 #print_f32_type 1
+COUNT FUNCTION uleb 0 uleb 0 #main_type 2
+COUNT FUNCTION uleb 1 i32 uleb 1 i32 #double_i32_type 3
+COUNT FUNCTION uleb 1 f32 uleb 1 f32 #double_f32_type 4
 SECTION_END
 
 SECTION SECTION_IMPORT
-COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type
+COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type #print_i32 0
+COUNT uleb 3 str env uleb 9 str print_f32 FUNCTION_KIND $print_f32_type #print_f32 1
 SECTION_END
 
 SECTION SECTION_FUNCTION
-COUNT #main 1 $main_type
-COUNT #double 2 $double_type
+COUNT $main_type #main 2
+COUNT $double_i32_type #double_i32 3
+COUNT $double_f32_type #double_f32 4
 SECTION_END
 
 SECTION SECTION_EXPORT
@@ -27,17 +31,29 @@ SECTION SECTION_CODE
 
 COUNT FUNCTION_START ; main()
     uleb 0
-    i32.const uleb 21
-    call $double
+    i32.const sleb 99
+    call $double_i32
     call $print_i32_type
+
+    f32.const float32 -0.001
+    call $double_f32
+    call $print_f32_type
     end
 FUNCTION_END
 
-COUNT FUNCTION_START ; double(i32) -> i32
-    uleb 0
-    local.get uleb 0
-    local.get uleb 0
+COUNT FUNCTION_START ; double_i32(i32) -> i32
+    uleb 0 #input 0
+    local.get $input
+    local.get $input
     i32.add
+    end
+FUNCTION_END
+
+COUNT FUNCTION_START ; double_f32(f32) -> f32
+    uleb 0 #input 0
+    local.get $input
+    local.get $input
+    f32.add
     end
 FUNCTION_END
 
@@ -47,7 +63,7 @@ SECTION_END
 memory = list([0] * (len(input_code) + 17))
 
 for i in range(len(input_code)):
-    memory[i] = input_codeord([i])
+    memory[i] = ord(input_code[i])
 
 output_directory = os.path.join(os.path.dirname(__file__), "bin")
 os.makedirs(output_directory, exist_ok=True)
@@ -124,6 +140,8 @@ s_iac_start = "Invalid ascii character `\0"
 s_iac_end = "`, Expected a single character with ascii value within 1-127.\n\0"
 s_ise_start = "Invalid SLEB 128 encoding `\0"
 s_ise_end = "`, valid characters are (0-9 and '-') and expected atleast 1 digit after '-'.\n\0"
+s_ifpn_start = "Invalid Floating-Point number `\0"
+s_ifpn_end = "`, valid characters are (0-9, '-', and '.'), expects atleast 1 digit after sign if present, and number must not exceed exponent limit (i.e. 1.7976931348623157e+308).\n\0"
 s_sizilc_start = "Scope is zero invalid label call `\0"
 s_sizilc_end = "`.\n\0"
 s_ik_start = "Invalid keyword `\0"
@@ -314,15 +332,17 @@ def error(index, value):
         print_string(s_iac_end)
     if value == 0x08:
         print_string(s_ise_start)
-        while not isWhiteSpace(index_pointer):
-            print_char(memory[index_pointer])
-            index_pointer += 1
+        print_char(memory[index_pointer])
         print_string(s_ise_end)
     if value == 0x09:
         print_string(s_iuc_start)
         print_char(memory[index_pointer])
         print_string(s_iuc_end)
-    if value > 0x09 or value < 0x01:
+    if value == 0x0A:
+        print_string(s_ifpn_start)
+        print_char(memory[index_pointer])
+        print_string(s_ifpn_end)
+    if value > 0x0A or value < 0x01:
         print_i32(value)
         print_string(s_ecind_end)
 
@@ -535,6 +555,124 @@ def writeFromAscii(index: int) -> int:
 
     return index + 1
 
+def writeFromFloat32(index: int) -> int:
+    return writeFromFloat(index, 23, 8, 127)
+
+def writeFromFloat64(index: int) -> int:
+    return writeFromFloat(index, 52, 11, 1023)
+
+def writeFromFloat(index: int, fraction_bits: int, exponent_bits: int, bias: int) -> int:
+    index = skipWhiteSpace(index)
+    number_start = index
+
+    negative = 0
+    decimal_seen = 0
+    digit_count = 0
+
+    number = 0.0
+    scale = 1.0
+
+    if memory[index] == 45:
+        negative = 1
+        index += 1
+
+    while memory[index] != 0 and not isWhiteSpace(index):
+        char = memory[index]
+
+        if char == 46:
+            if decimal_seen:
+                error(index, 0x0A)
+
+            decimal_seen = 1
+
+        else:
+            if char < 48 or char > 57:
+                error(index, 0x0A)
+
+            number = number * 10.0 + (char - 48)
+            digit_count += 1
+
+            if decimal_seen:
+                scale *= 10.0
+
+            if number > 1.7976931348623157e308:
+                error(number_start, 0x0A)
+
+            if scale > 1.7976931348623157e308:
+                error(number_start, 0x0A)
+
+        index += 1
+
+    if digit_count == 0:
+        error(number_start, 0x0A)
+
+    number = number / scale
+
+    writeFloatBits(number, negative, fraction_bits, exponent_bits, bias, number_start)
+    return index
+
+def writeFloatBits(number: float, negative: int, fraction_bits: int, exponent_bits: int, bias: int, number_start: int):
+    exponent = 0
+    encoded_exponent = 0
+    fraction = 0
+    exponent_limit = (1 << exponent_bits) - 1
+
+    if number != 0.0:
+        while number >= 2.0: # Normalize towards 1 <= number < 2.
+            number /= 2.0
+            exponent += 1
+
+        while number < 1.0 and exponent > 1 - bias: # Stop at the smallest normal exponent.
+            number *= 2.0
+            exponent -= 1
+
+        if number < 1.0: # Subnormal: no implicit leading 1.
+            encoded_exponent = 0
+        else:
+            encoded_exponent = exponent + bias
+            number -= 1.0
+
+        if encoded_exponent >= exponent_limit:
+            error(number_start, 0x0A)
+
+        # Extract the fraction one binary digit at a time.
+        bit_index = 0
+
+        while bit_index < fraction_bits:
+            number *= 2.0
+            fraction <<= 1
+
+            if number >= 1.0:
+                fraction |= 1
+                number -= 1.0
+
+            bit_index += 1
+
+        # Round to nearest, resolving exact ties towards even.
+        if number > 0.5 or (
+            number == 0.5 and (fraction & 1) != 0
+        ):
+            fraction += 1
+
+        # Rounding can carry into the exponent.
+        if fraction == (1 << fraction_bits):
+            fraction = 0
+            encoded_exponent += 1
+
+        if encoded_exponent >= exponent_limit:
+            error(number_start, 0x0A)
+
+    bits = (negative << (fraction_bits + exponent_bits)) | (encoded_exponent << fraction_bits) | fraction
+
+    byte_count = (1 + exponent_bits + fraction_bits) // 8
+    byte_index = 0
+
+    # Least-significant byte first: little endian.
+    while byte_index < byte_count:
+        writeSectionChar(bits & 0xFF)
+        bits >>= 8
+        byte_index += 1
+
 def setVariable(index: int) -> int:
     global LAST_SYMBOL_ID
     global symbol_names_stack_index
@@ -548,6 +686,8 @@ def setVariable(index: int) -> int:
     while memory[index + variable_name_length] != 0 and not isWhiteSpace(index + variable_name_length):
         variable_name_length += 1
     index += variable_name_length
+
+    index = skipWhiteSpace(index) # move past whitespace to digit
 
     # Get value
     while True:
@@ -1009,21 +1149,34 @@ def parseWord(index: int) -> int:
     global LABEL_SCOPE
     global LABEL_FIRST_SYMBOL_ID
     global COUNT
+    if equals3(index, ord('i'), ord('3'), ord('2')):
+        writeSectionChar(0x7F)
+        return index + 3
+    if equals3(index, ord('i'), ord('6'), ord('4')):
+        writeSectionChar(0x7E)
+        return index + 3
+    if equals3(index, ord('f'), ord('3'), ord('2')):
+        writeSectionChar(0x7D)
+        return index + 3
+    if equals3(index, ord('f'), ord('6'), ord('4')):
+        writeSectionChar(0x7C)
+        return index + 3
     if equals3(index, ord('h'), ord('e'), ord('x')):
         return writeFromHex(index + 3)
     if equals3(index, ord('b'), ord('i'), ord('n')):
         return writeFromBin(index + 3)
     if equals3(index, ord('s'), ord('t'), ord('r')):
         return writeFromString(index + 3)
-    if equals3(index, ord('i'), ord('3'), ord('2')):
-        writeSectionChar(0x7F)
-        return index + 3
     if equals4(index, ord('u'), ord('l'), ord('e'), ord('b')):
         return writeFromUleb(index + 4)
     if equals4(index, ord('s'), ord('l'), ord('e'), ord('b')):
         return writeFromSleb(index + 4)
     if equals5(index, ord('a'), ord('s'), ord('c'), ord('i'), ord('i')):
         return writeFromAscii(index + 5)
+    if equals7(index, ord('f'), ord('l'), ord('o'), ord('a'), ord('t'), ord('3'), ord('2')):
+        return writeFromFloat32(index + 7)
+    if equals7(index, ord('f'), ord('l'), ord('o'), ord('a'), ord('t'), ord('6'), ord('4')):
+        return writeFromFloat64(index + 7)
     if equals7(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
         COUNT = 0

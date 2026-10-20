@@ -45,6 +45,14 @@
 | f32 | `f32.const` | `0x43` |
 | f64 | `f64.const` | `0x44` |
 
+# Types
+| Type | Opcode | Hex |
+|---|---|---:|
+| Integer 32 bits | `i32` | `0x7F` |
+| Integer 64 bits | `i64` | `0x7E` |
+| Floating-Point 32 bits | `f32` | `0x7D` |
+| Floating-Point 64 bits | `f64` | `0x7C` |
+
 # i32
 
 ## i32 Comparisons

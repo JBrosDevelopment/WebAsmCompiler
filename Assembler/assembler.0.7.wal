@@ -1,0 +1,8112 @@
+; Assembler.0.7
+; Adds float32/float64 decimal operands and floating-point diagnostics.
+; Decimal parsing, normalization, and ties-to-even rounding follow FullAssembler.py.
+; Only an optional minus sign, decimal digits, and one decimal point are accepted.
+; f64 calculations and i64 bit fields retain both IEEE binary32 and binary64 precision.
+; Raw type bytes keep this source bootstrappable by assembler 0.6.
+; The older assembler spells floating-point division div_s; that spelling is retained here.
+
+; Functions Added:
+; * writeFromFloat32(index: int) -> int
+; * writeFromFloat64(index: int) -> int
+; * writeFromFloat(index: int, fraction_bits: int, exponent_bits: int, bias: int) -> int
+; * writeFloatBits(number: float, negative: int, fraction_bits: int, exponent_bits: int, bias: int, number_start: int) -> void
+
+; Also added strings for errors occuring in parsing floating point numbers
+
+; code below:
+
+; Global memory addresses (i32.load reads values; i32.store changes them).
+#sectionMemory 4194304
+#functionMemory 5242880
+#symbol_names 6291456
+#symbol_values 6307840
+
+; Mutable global values occupy one four-byte slot each.
+#SECTION_BYTES_OUT 6324224
+#SECTION_LAST_BYTES_OUT 6324228
+#FUNCTION_BYTES_OUT 6324232
+#FUNCTION_LAST_BYTES_OUT 6324236
+#WRITING_TO_FUNCTION 6324240
+#LAST_SYMBOL_ID 6324244
+#CURRENT_SECTION 6324248
+#symbol_names_stack_index 6324252
+#symbol_values_stack_index 6324256
+#LABEL_SCOPE 6324260
+#LABEL_FIRST_SYMBOL_ID 6324264
+#COUNT 6324268
+
+; Tracing and zero-terminated diagnostic strings, initialized by the DATA section.
+#CURRENT_LINE 6324272
+#s_ei_start 6324276
+#s_ei_end 6324284
+#s_vdne_start 6324288
+#s_vdne_end 6324299
+#s_ihc_start 6324318
+#s_ihc_end 6324342
+#s_ibc_start 6324378
+#s_ibc_end 6324405
+#s_iuc_start 6324437
+#s_iuc_end 6324462
+#s_iac_start 6324490
+#s_iac_end 6324516
+#s_ise_start 6324579
+#s_ise_end 6324607
+#s_sizilc_start 6324686
+#s_sizilc_end 6324721
+#s_ik_start 6324725
+#s_ik_end 6324721
+#s_ldne_start 6324743
+#s_ldne_end 6324299
+#s_ecind_start 6324751
+#s_ecind_end 6324764
+#s_eool_start 6324783
+#s_eool_end 6324721
+#s_ois_start 6324807
+#s_ois_end 6324721
+#s_ois_TYPE 6324828
+#s_ois_IMPORT 6324833
+#s_ois_FUNCTION 6324840
+#s_ois_MEMORY 6324849
+#s_ois_GLOBAL 6324856
+#s_ois_EXPORT 6324863
+#s_ois_CODE 6324870
+#s_ois_DATA 6324875
+#s_pf 6324880
+
+
+; Float diagnostics follow the existing zero-terminated strings.
+#s_ifpn_start 6324895
+#s_ifpn_end 6324927
+
+; Input region ends where sectionMemory begins.
+#inputLimit 4194304
+
+; All index-taking helpers use local slot 0; locals belong to each function call.
+#index 0
+
+; Shared local parameter indices used by the equalsN helpers.
+#c1 1
+#c2 2
+#c3 3
+#c4 4
+#c5 5
+#c6 6
+#c7 7
+#c8 8
+#c9 9
+#c10 10
+#c11 11
+#c12 12
+#c13 13
+#c14 14
+#c15 15
+#c16 16
+
+SECTION_HEADER
+SECTION SECTION_TYPE
+
+	; Number of distinct all-i32 signatures.
+	uleb 20
+
+	; Type 0: 1 i32 parameters, 0 i32 result.
+	FUNCTION uleb 1 i32 uleb 0
+
+	; Type 1: 4 i32 parameters, 0 i32 result.
+	FUNCTION uleb 4 i32 i32 i32 i32 uleb 0
+
+	; Type 2: 1 i32 parameters, 1 i32 result.
+	FUNCTION uleb 1 i32 uleb 1 i32
+
+	; Type 3: 3 i32 parameters, 1 i32 result.
+	FUNCTION uleb 3 i32 i32 i32 uleb 1 i32
+
+	; Type 4: 4 i32 parameters, 1 i32 result.
+	FUNCTION uleb 4 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 5: 5 i32 parameters, 1 i32 result.
+	FUNCTION uleb 5 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 6: 6 i32 parameters, 1 i32 result.
+	FUNCTION uleb 6 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 7: 7 i32 parameters, 1 i32 result.
+	FUNCTION uleb 7 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 8: 8 i32 parameters, 1 i32 result.
+	FUNCTION uleb 8 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 9: 9 i32 parameters, 1 i32 result.
+	FUNCTION uleb 9 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 10: 10 i32 parameters, 1 i32 result.
+	FUNCTION uleb 10 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 11: 11 i32 parameters, 1 i32 result.
+	FUNCTION uleb 11 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 12: 12 i32 parameters, 1 i32 result.
+	FUNCTION uleb 12 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 13: 13 i32 parameters, 1 i32 result.
+	FUNCTION uleb 13 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 14: 14 i32 parameters, 1 i32 result.
+	FUNCTION uleb 14 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 15: 15 i32 parameters, 1 i32 result.
+	FUNCTION uleb 15 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 16: 17 i32 parameters, 1 i32 result.
+	FUNCTION uleb 17 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 uleb 1 i32
+
+	; Type 17: 0 i32 parameters, 0 i32 result.
+	FUNCTION uleb 0  uleb 0
+
+	; Type 18: 2 i32 parameters, 0 results (error).
+	FUNCTION uleb 2 i32 i32 uleb 0
+
+	; Type 19: f64 and five i32 parameters, no result (writeFloatBits).
+	FUNCTION uleb 6 hex 7C i32 i32 i32 i32 i32 uleb 0
+SECTION_END
+SECTION SECTION_IMPORT
+	uleb 5
+	uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND uleb 0 #f_print_i32 0
+	uleb 3 str env uleb 10 str print_char FUNCTION_KIND uleb 0 #f_print_char 1
+	uleb 3 str env uleb 10 str write_char FUNCTION_KIND uleb 0 #f_write_char 2
+	uleb 3 str env uleb 12 str exit_program FUNCTION_KIND uleb 0 #f_exit_program 3
+	uleb 3 str env uleb 12 str print_string FUNCTION_KIND uleb 0 #f_print_string 4
+SECTION_END
+SECTION SECTION_FUNCTION
+	uleb 40
+	#f_writeSectionChar 5 uleb 0
+	#f_writeSection 6 uleb 1
+	#f_isWhiteSpace 7 uleb 2
+	#f_skipWhiteSpace 8 uleb 2
+	#f_isComment 9 uleb 2
+	#f_skipComment 10 uleb 2
+	#f_equals2 11 uleb 3
+	#f_equals3 12 uleb 4
+	#f_equals4 13 uleb 5
+	#f_equals5 14 uleb 6
+	#f_equals6 15 uleb 7
+	#f_equals7 16 uleb 8
+	#f_equals8 17 uleb 9
+	#f_equals9 18 uleb 10
+	#f_equals10 19 uleb 11
+	#f_equals11 20 uleb 12
+	#f_equals12 21 uleb 13
+	#f_equals13 22 uleb 14
+	#f_equals14 23 uleb 15
+	#f_equals16 24 uleb 16
+	#f_error 25 uleb 18
+	#f_writeByte 26 uleb 0
+	#f_writeFromHex 27 uleb 2
+	#f_writeFromBin 28 uleb 2
+	#f_writeFromString 29 uleb 2
+	#f_writeFromUleb 30 uleb 2
+	#f_setVariable 31 uleb 2
+	#f_getVariable 32 uleb 2
+	#f_setLabel 33 uleb 2
+	#f_getLabel 34 uleb 2
+	#f_parseCmd 35 uleb 2
+	#f_parseWord 36 uleb 2
+	#f_main 37 uleb 17
+	#f_writeFromAscii 38 uleb 2
+	#f_writeSignedByte 39 uleb 0
+	#f_writeFromSleb 40 uleb 2
+	#f_writeFromFloat32 41 uleb 2
+	#f_writeFromFloat64 42 uleb 2
+	#f_writeFromFloat 43 uleb 4
+	#f_writeFloatBits 44 uleb 19
+SECTION_END
+SECTION SECTION_MEMORY
+	; One memory, minimum 97 pages, no declared maximum.
+	uleb 1 uleb 0 uleb 97
+SECTION_END
+SECTION SECTION_EXPORT
+	uleb 2
+	uleb 4 str main FUNCTION_KIND $f_main
+	uleb 6 str memory uleb 2 uleb 0
+SECTION_END
+SECTION SECTION_CODE
+	; function count = 40
+	uleb 40
+	FUNCTION_START ; writeSectionChar(char)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+		#writeSectionChar_char 0
+
+		; if WRITING_TO_FUNCTION == 1
+		i32.const $WRITING_TO_FUNCTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.eq
+		if NO_RETURN
+
+			; functionMemory[FUNCTION_BYTES_OUT] = char
+			i32.const $FUNCTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const $functionMemory
+			i32.add
+			local.get $writeSectionChar_char
+			i32.store8 uleb 0 uleb 0
+
+			; FUNCTION_BYTES_OUT += 1
+			i32.const $FUNCTION_BYTES_OUT
+			i32.const $FUNCTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+		else
+
+			; sectionMemory[SECTION_BYTES_OUT] = char
+			i32.const $SECTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const $sectionMemory
+			i32.add
+			local.get $writeSectionChar_char
+			i32.store8 uleb 0 uleb 0
+
+			; SECTION_BYTES_OUT += 1
+			i32.const $SECTION_BYTES_OUT
+			i32.const $SECTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+		end
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeSection(writing_function, type, length, start)
+
+		; extra locals = 6 (start at 0)
+		uleb 1 uleb 6 i32
+
+		; local names
+		#sec_writing_function 0
+		#sec_type 1
+		#sec_length 2
+		#sec_start 3
+		#sec_sec_length 4
+		#sec_length_byte 5
+		#sec_index 6
+		#sec_count_byte 7
+		#sec_remaining_count 8
+		#sec_count 9
+
+		; sec_length = length
+		local.get $sec_length
+		local.set $sec_sec_length
+
+		; count = COUNT
+		i32.const $COUNT
+		i32.load uleb 2 uleb 0
+		local.set $sec_count
+
+		; if writing_function == 0
+		local.get $sec_writing_function
+		i32.const sleb 0
+		i32.eq
+		if NO_RETURN
+
+			; write_char(type)
+			local.get $sec_type
+			call $f_write_char
+
+			; remaining_count = count
+			local.get $sec_count
+			local.set $sec_remaining_count
+
+			; while remaining_count > 0
+			block NO_RETURN @remaining_count_done
+				loop NO_RETURN @remaining_count_loop
+					local.get $sec_remaining_count
+					i32.const sleb 0
+					i32.gt_s
+					i32.eqz
+					br_if ^remaining_count_done
+
+					; length += 1
+					local.get $sec_length
+					i32.const sleb 1
+					i32.add
+					local.set $sec_length
+
+					; remaining_count >>= 7
+					local.get $sec_remaining_count
+					i32.const sleb 7
+					i32.shr_u
+					local.set $sec_remaining_count
+
+					; repeat
+					br ^remaining_count_loop
+				end
+			end
+		end
+
+		; length_byte = 0
+		i32.const sleb 0
+		local.set $sec_length_byte
+
+		; while length > 0
+		block NO_RETURN @length_done
+			loop NO_RETURN @length_loop
+				local.get $sec_length
+				i32.const sleb 0
+				i32.gt_s
+				i32.eqz
+				br_if ^length_done
+
+				; byte = length & 127
+				local.get $sec_length
+				i32.const sleb 127
+				i32.and
+				local.set $sec_length_byte
+
+				; if length >= 128
+				local.get $sec_length
+				i32.const sleb 128
+				i32.ge_s
+				if NO_RETURN
+
+					; byte |= 128
+					local.get $sec_length_byte
+					i32.const sleb 128
+					i32.or
+					local.set $sec_length_byte
+				end
+
+				; if writing_function == 1
+				local.get $sec_writing_function
+				i32.const sleb 1
+				i32.eq
+				if NO_RETURN
+
+					; writeSectionChar(byte)
+					local.get $sec_length_byte
+					call $f_writeSectionChar
+				else
+
+					; write_char(byte)
+					local.get $sec_length_byte
+					call $f_write_char
+				end
+
+				; length = length >> 7
+				local.get $sec_length
+				i32.const sleb 7
+				i32.shr_u
+				local.set $sec_length
+
+				; repeat
+				br ^length_loop
+			end
+		end
+
+		; count_byte = 0
+		i32.const sleb 0
+		local.set $sec_count_byte
+
+		; while count > 0 and writing_function == 0
+		block NO_RETURN @count_done
+			loop NO_RETURN @count_loop
+				local.get $sec_writing_function
+				i32.const sleb 0
+				i32.ne
+				local.get $sec_count
+				i32.const sleb 0
+				i32.gt_s
+				i32.eqz
+				i32.or
+				br_if ^count_done
+
+				; byte = count & 127
+				local.get $sec_count
+				i32.const sleb 127
+				i32.and
+				local.set $sec_count_byte
+
+				; if count >= 128
+				local.get $sec_count
+				i32.const sleb 128
+				i32.ge_s
+				if NO_RETURN
+
+					; byte |= 128
+					local.get $sec_count_byte
+					i32.const sleb 128
+					i32.or
+					local.set $sec_count_byte
+				end
+
+				; write_char(byte)
+				local.get $sec_count_byte
+				call $f_write_char
+
+				; count = count >> 7
+				local.get $sec_count
+				i32.const sleb 7
+				i32.shr_u
+				local.set $sec_count
+
+				; repeat
+				br ^count_loop
+			end
+		end
+
+		; index = start
+		local.get $sec_start
+		local.set $sec_index
+
+		; while index < start + sec_length
+		block NO_RETURN @data_done
+			loop NO_RETURN @data_loop
+				local.get $sec_index
+				local.get $sec_start
+				local.get $sec_sec_length
+				i32.add
+				i32.lt_s
+				i32.eqz
+				br_if ^data_done
+
+				; if writing_function == 1
+				local.get $sec_writing_function
+				i32.const sleb 1
+				i32.eq
+				if NO_RETURN
+
+					; writeSectionChar(functionMemory[index])
+					local.get $sec_index
+					i32.const $functionMemory
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					call $f_writeSectionChar
+				else
+
+					; write_char(sectionMemory[index])
+					local.get $sec_index
+					i32.const $sectionMemory
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					call $f_write_char
+				end
+
+				; index += 1
+				local.get $sec_index
+				i32.const sleb 1
+				i32.add
+				local.set $sec_index
+
+				; repeat
+				br ^data_loop
+			end
+		end
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; isWhiteSpace(index)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return memory[index] == ' ' or memory[index] == '\t' or memory[index] == '\n'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const sleb 32
+		i32.eq
+		if i32
+			i32.const sleb 1
+		else
+			local.get $index
+			i32.load8_u uleb 0 uleb 0
+			i32.const sleb 9
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 10
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; skipWhiteSpace(index)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; while true
+		block NO_RETURN @spaces_done
+			loop NO_RETURN @spaces_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^spaces_done
+
+				; Count each newline as it is consumed.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 10
+				i32.eq
+				if NO_RETURN
+					i32.const $CURRENT_LINE
+					i32.const $CURRENT_LINE
+					i32.load uleb 2 uleb 0
+					i32.const sleb 1
+					i32.add
+					i32.store uleb 2 uleb 0
+				end
+
+				; if not isWhiteSpace(index)
+				local.get $index
+				call $f_isWhiteSpace
+				i32.eqz
+				if NO_RETURN
+
+					; break
+					br ^spaces_done
+				end
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; repeat
+				br ^spaces_loop
+			end
+		end
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; isComment(index)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return memory[index] == ';'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const sleb 59
+		i32.eq
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; skipComment(index)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; while true
+		block NO_RETURN @comment_done
+			loop NO_RETURN @comment_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^comment_done
+
+				; if memory[index] == '\n'
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 10
+				i32.eq
+				if NO_RETURN
+
+					; break
+					br ^comment_done
+				end
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; repeat
+				br ^comment_loop
+			end
+		end
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals2(index, c1, c2)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 2 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				call $f_isWhiteSpace
+				i32.eqz
+				i32.eqz
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals3(index, c1, c2, c3)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 3 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					call $f_isWhiteSpace
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals4(index, c1, c2, c3, c4)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 4 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						call $f_isWhiteSpace
+						i32.eqz
+						i32.eqz
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals5(index, c1, c2, c3, c4, c5)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 5 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							call $f_isWhiteSpace
+							i32.eqz
+							i32.eqz
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals6(index, c1, c2, c3, c4, c5, c6)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 6 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								call $f_isWhiteSpace
+								i32.eqz
+								i32.eqz
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals7(index, c1, c2, c3, c4, c5, c6, c7)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 7 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									call $f_isWhiteSpace
+									i32.eqz
+									i32.eqz
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals8(index, c1, c2, c3, c4, c5, c6, c7, c8)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 8 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										call $f_isWhiteSpace
+										i32.eqz
+										i32.eqz
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals9(index, c1, c2, c3, c4, c5, c6, c7, c8, c9)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 9 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											call $f_isWhiteSpace
+											i32.eqz
+											i32.eqz
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals10(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 10 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												call $f_isWhiteSpace
+												i32.eqz
+												i32.eqz
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals11(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 11 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												i32.load8_u uleb 0 uleb 0
+												local.get $c11
+												i32.eq
+												if i32
+													local.get $index
+													i32.const sleb 11
+													i32.add
+													call $f_isWhiteSpace
+													i32.eqz
+													i32.eqz
+												else
+													i32.const sleb 0
+												end
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals12(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 12 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												i32.load8_u uleb 0 uleb 0
+												local.get $c11
+												i32.eq
+												if i32
+													local.get $index
+													i32.const sleb 11
+													i32.add
+													i32.load8_u uleb 0 uleb 0
+													local.get $c12
+													i32.eq
+													if i32
+														local.get $index
+														i32.const sleb 12
+														i32.add
+														call $f_isWhiteSpace
+														i32.eqz
+														i32.eqz
+													else
+														i32.const sleb 0
+													end
+												else
+													i32.const sleb 0
+												end
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals13(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 13 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												i32.load8_u uleb 0 uleb 0
+												local.get $c11
+												i32.eq
+												if i32
+													local.get $index
+													i32.const sleb 11
+													i32.add
+													i32.load8_u uleb 0 uleb 0
+													local.get $c12
+													i32.eq
+													if i32
+														local.get $index
+														i32.const sleb 12
+														i32.add
+														i32.load8_u uleb 0 uleb 0
+														local.get $c13
+														i32.eq
+														if i32
+															local.get $index
+															i32.const sleb 13
+															i32.add
+															call $f_isWhiteSpace
+															i32.eqz
+															i32.eqz
+														else
+															i32.const sleb 0
+														end
+													else
+														i32.const sleb 0
+													end
+												else
+													i32.const sleb 0
+												end
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals14(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 14 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												i32.load8_u uleb 0 uleb 0
+												local.get $c11
+												i32.eq
+												if i32
+													local.get $index
+													i32.const sleb 11
+													i32.add
+													i32.load8_u uleb 0 uleb 0
+													local.get $c12
+													i32.eq
+													if i32
+														local.get $index
+														i32.const sleb 12
+														i32.add
+														i32.load8_u uleb 0 uleb 0
+														local.get $c13
+														i32.eq
+														if i32
+															local.get $index
+															i32.const sleb 13
+															i32.add
+															i32.load8_u uleb 0 uleb 0
+															local.get $c14
+															i32.eq
+															if i32
+																local.get $index
+																i32.const sleb 14
+																i32.add
+																call $f_isWhiteSpace
+																i32.eqz
+																i32.eqz
+															else
+																i32.const sleb 0
+															end
+														else
+															i32.const sleb 0
+														end
+													else
+														i32.const sleb 0
+													end
+												else
+													i32.const sleb 0
+												end
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; equals16(index, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; return true if the next 16 characters match and end at whitespace
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.get $c1
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			local.get $c2
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				local.get $c3
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					local.get $c4
+					i32.eq
+					if i32
+						local.get $index
+						i32.const sleb 4
+						i32.add
+						i32.load8_u uleb 0 uleb 0
+						local.get $c5
+						i32.eq
+						if i32
+							local.get $index
+							i32.const sleb 5
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $c6
+							i32.eq
+							if i32
+								local.get $index
+								i32.const sleb 6
+								i32.add
+								i32.load8_u uleb 0 uleb 0
+								local.get $c7
+								i32.eq
+								if i32
+									local.get $index
+									i32.const sleb 7
+									i32.add
+									i32.load8_u uleb 0 uleb 0
+									local.get $c8
+									i32.eq
+									if i32
+										local.get $index
+										i32.const sleb 8
+										i32.add
+										i32.load8_u uleb 0 uleb 0
+										local.get $c9
+										i32.eq
+										if i32
+											local.get $index
+											i32.const sleb 9
+											i32.add
+											i32.load8_u uleb 0 uleb 0
+											local.get $c10
+											i32.eq
+											if i32
+												local.get $index
+												i32.const sleb 10
+												i32.add
+												i32.load8_u uleb 0 uleb 0
+												local.get $c11
+												i32.eq
+												if i32
+													local.get $index
+													i32.const sleb 11
+													i32.add
+													i32.load8_u uleb 0 uleb 0
+													local.get $c12
+													i32.eq
+													if i32
+														local.get $index
+														i32.const sleb 12
+														i32.add
+														i32.load8_u uleb 0 uleb 0
+														local.get $c13
+														i32.eq
+														if i32
+															local.get $index
+															i32.const sleb 13
+															i32.add
+															i32.load8_u uleb 0 uleb 0
+															local.get $c14
+															i32.eq
+															if i32
+																local.get $index
+																i32.const sleb 14
+																i32.add
+																i32.load8_u uleb 0 uleb 0
+																local.get $c15
+																i32.eq
+																if i32
+																	local.get $index
+																	i32.const sleb 15
+																	i32.add
+																	i32.load8_u uleb 0 uleb 0
+																	local.get $c16
+																	i32.eq
+																	if i32
+																		local.get $index
+																		i32.const sleb 16
+																		i32.add
+																		call $f_isWhiteSpace
+																		i32.eqz
+																		i32.eqz
+																	else
+																		i32.const sleb 0
+																	end
+																else
+																	i32.const sleb 0
+																end
+															else
+																i32.const sleb 0
+															end
+														else
+															i32.const sleb 0
+														end
+													else
+														i32.const sleb 0
+													end
+												else
+													i32.const sleb 0
+												end
+											else
+												i32.const sleb 0
+											end
+										else
+											i32.const sleb 0
+										end
+									else
+										i32.const sleb 0
+									end
+								else
+									i32.const sleb 0
+								end
+							else
+								i32.const sleb 0
+							end
+						else
+							i32.const sleb 0
+						end
+					else
+						i32.const sleb 0
+					end
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; error(index, value)
+
+		; Parameters are the failing source index and error code.
+		uleb 1 uleb 2 i32
+		#error_value 1
+		#error_pointer 2
+		#error_line_start 3
+
+		i32.const $s_ei_start
+		call $f_print_string
+		local.get $error_value
+		call $f_print_i32
+		i32.const $s_ei_end
+		call $f_print_string
+		local.get $index
+		local.set $error_pointer
+
+		; Diagnostic for error 1.
+		local.get $error_value
+		i32.const sleb 1
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ihc_start
+			call $f_print_string
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			call $f_print_char
+			i32.const $s_ihc_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 2.
+		local.get $error_value
+		i32.const sleb 2
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ibc_start
+			call $f_print_string
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			call $f_print_char
+			i32.const $s_ibc_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 3.
+		local.get $error_value
+		i32.const sleb 3
+		i32.eq
+		if NO_RETURN
+			i32.const $s_vdne_start
+			call $f_print_string
+			block NO_RETURN @td3
+				loop NO_RETURN @tl3
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td3
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td3
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call $f_print_char
+					local.get $error_pointer
+					i32.const sleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl3
+				end
+			end
+			i32.const $s_vdne_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 4.
+		local.get $error_value
+		i32.const sleb 4
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ik_start
+			call $f_print_string
+			block NO_RETURN @td4
+				loop NO_RETURN @tl4
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td4
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td4
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call $f_print_char
+					local.get $error_pointer
+					i32.const sleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl4
+				end
+			end
+			i32.const $s_ik_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 5.
+		local.get $error_value
+		i32.const sleb 5
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ldne_start
+			call $f_print_string
+			block NO_RETURN @td5
+				loop NO_RETURN @tl5
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td5
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td5
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call $f_print_char
+					local.get $error_pointer
+					i32.const sleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl5
+				end
+			end
+			i32.const $s_ldne_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 6.
+		local.get $error_value
+		i32.const sleb 6
+		i32.eq
+		if NO_RETURN
+			i32.const $s_sizilc_start
+			call $f_print_string
+			block NO_RETURN @td6
+				loop NO_RETURN @tl6
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td6
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td6
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call $f_print_char
+					local.get $error_pointer
+					i32.const sleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl6
+				end
+			end
+			i32.const $s_sizilc_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 7.
+		local.get $error_value
+		i32.const sleb 7
+		i32.eq
+		if NO_RETURN
+			i32.const $s_iac_start
+			call $f_print_string
+			block NO_RETURN @td7
+				loop NO_RETURN @tl7
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					i32.eqz
+					br_if ^td7
+					local.get $error_pointer
+					call $f_isWhiteSpace
+					br_if ^td7
+					local.get $error_pointer
+					i32.load8_u uleb 0 uleb 0
+					call $f_print_char
+					local.get $error_pointer
+					i32.const sleb 1
+					i32.add
+					local.set $error_pointer
+					br ^tl7
+				end
+			end
+			i32.const $s_iac_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 8.
+		local.get $error_value
+		i32.const sleb 8
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ise_start
+			call $f_print_string
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			if NO_RETURN
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				call $f_print_char
+			end
+			i32.const $s_ise_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 9.
+		local.get $error_value
+		i32.const sleb 9
+		i32.eq
+		if NO_RETURN
+			i32.const $s_iuc_start
+			call $f_print_string
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			if NO_RETURN
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				call $f_print_char
+			end
+			i32.const $s_iuc_end
+			call $f_print_string
+		end
+
+		; Diagnostic for error 10.
+		local.get $error_value
+		i32.const sleb 10
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ifpn_start
+			call $f_print_string
+			local.get $error_pointer
+			i32.load8_u uleb 0 uleb 0
+			if NO_RETURN
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				call $f_print_char
+			end
+			i32.const $s_ifpn_end
+			call $f_print_string
+		end
+
+		; Unknown error codes still produce a complete diagnostic.
+		local.get $error_value
+		i32.const sleb 1
+		i32.lt_s
+		local.get $error_value
+		i32.const sleb 10
+		i32.gt_s
+		i32.or
+		if NO_RETURN
+			i32.const $s_ecind_start
+			call $f_print_string
+			local.get $error_value
+			call $f_print_i32
+			i32.const $s_ecind_end
+			call $f_print_string
+		end
+
+		i32.const $s_ois_start
+		call $f_print_string
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_TYPE
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_IMPORT
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 3
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_FUNCTION
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 5
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_MEMORY
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 6
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_GLOBAL
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 7
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_EXPORT
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 10
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_CODE
+			call $f_print_string
+		end
+		i32.const $CURRENT_SECTION
+		i32.load uleb 2 uleb 0
+		i32.const sleb 11
+		i32.eq
+		if NO_RETURN
+			i32.const $s_ois_DATA
+			call $f_print_string
+		end
+		i32.const $s_ois_end
+		call $f_print_string
+		i32.const $s_eool_start
+		call $f_print_string
+		i32.const $CURRENT_LINE
+		i32.load uleb 2 uleb 0
+		call $f_print_i32
+		i32.const $s_eool_end
+		call $f_print_string
+
+		; Find the start of the source line without reading before address zero.
+		local.get $index
+		local.set $error_pointer
+		block NO_RETURN @sd
+			loop NO_RETURN @sl
+				local.get $error_pointer
+				i32.eqz
+				br_if ^sd
+				local.get $error_pointer
+				i32.const sleb 1
+				i32.sub
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 10
+				i32.eq
+				br_if ^sd
+				local.get $error_pointer
+				i32.const sleb 1
+				i32.sub
+				local.set $error_pointer
+				br ^sl
+			end
+		end
+		local.get $error_pointer
+		local.set $error_line_start
+
+		; Print the complete line, including a final line without a newline.
+		i32.const sleb 10
+		call $f_print_char
+		block NO_RETURN @ld
+			loop NO_RETURN @ll
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^ld
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 10
+				i32.eq
+				br_if ^ld
+				local.get $error_pointer
+				i32.load8_u uleb 0 uleb 0
+				call $f_print_char
+				local.get $error_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $error_pointer
+				br ^ll
+			end
+		end
+		i32.const sleb 10
+		call $f_print_char
+
+		; Align the underline; preserve tabs to match the displayed source.
+		block NO_RETURN @pd
+			loop NO_RETURN @pl
+				local.get $error_line_start
+				local.get $index
+				i32.ge_u
+				br_if ^pd
+				local.get $error_line_start
+				i32.load8_u uleb 0 uleb 0
+				i32.const sleb 9
+				i32.eq
+				if i32
+					i32.const sleb 9
+				else
+					i32.const sleb 32
+				end
+				call $f_print_char
+				local.get $error_line_start
+				i32.const sleb 1
+				i32.add
+				local.set $error_line_start
+				br ^pl
+			end
+		end
+		block NO_RETURN @underld
+			loop NO_RETURN @underll
+				local.get $error_line_start
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^underld
+				local.get $error_line_start
+				call $f_isWhiteSpace
+				br_if ^underld
+				i32.const ascii ~
+				call $f_print_char
+				local.get $error_line_start
+				i32.const sleb 1
+				i32.add
+				local.set $error_line_start
+				br ^underll
+			end
+		end
+		i32.const sleb 10
+		call $f_print_char
+		i32.const sleb 10
+		call $f_print_char
+		i32.const $s_pf
+		call $f_print_string
+		local.get $error_value
+		call $f_exit_program
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeByte(number)
+
+		; extra locals = 1 (start at 0)
+		uleb 1 uleb 1 i32
+
+		; local names
+		#writeByte_number 0
+		#writeByte_byte 1
+
+		; byte = 0
+		i32.const sleb 0
+		local.set $writeByte_byte
+
+		; if number == 0
+		local.get $writeByte_number
+		i32.const sleb 0
+		i32.eq
+		if NO_RETURN
+
+			; writeSectionChar(0)
+			i32.const sleb 0
+			call $f_writeSectionChar
+
+			; return
+			return
+		end
+
+		; while number > 0
+		block NO_RETURN @bytes_done
+			loop NO_RETURN @bytes_loop
+				local.get $writeByte_number
+				i32.const sleb 0
+				i32.gt_u
+				i32.eqz
+				br_if ^bytes_done
+
+				; byte = number & 127
+				local.get $writeByte_number
+				i32.const sleb 127
+				i32.and
+				local.set $writeByte_byte
+
+				; if number >= 128
+				local.get $writeByte_number
+				i32.const sleb 128
+				i32.ge_u
+				if NO_RETURN
+
+					; byte |= 128
+					local.get $writeByte_byte
+					i32.const sleb 128
+					i32.or
+					local.set $writeByte_byte
+				end
+
+				; writeSectionChar(byte)
+				local.get $writeByte_byte
+				call $f_writeSectionChar
+
+				; number = number >> 7
+				local.get $writeByte_number
+				i32.const sleb 7
+				i32.shr_u
+				local.set $writeByte_number
+
+				; repeat
+				br ^bytes_loop
+			end
+		end
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromHex(index)
+
+		; extra locals = 3 (start at 0)
+		uleb 1 uleb 3 i32
+
+		; local names
+		#hex_result 1
+		#hex_val 2
+		#hex_char 3
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; result = 0
+		i32.const sleb 0
+		local.set $hex_result
+
+		; val = 0
+		i32.const sleb 0
+		local.set $hex_val
+
+		; char = 0
+		i32.const sleb 0
+		local.set $hex_char
+
+		; while true
+		block NO_RETURN @digits_done
+			loop NO_RETURN @digits_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^digits_done
+
+				; char = memory[index]
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				local.set $hex_char
+
+				; if char >= '0' and char <= '9'
+				local.get $hex_char
+				i32.const str 0
+				i32.ge_s
+				if i32
+					local.get $hex_char
+					i32.const str 9
+					i32.le_s
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+				if NO_RETURN
+
+					; val = char - '0'
+					local.get $hex_char
+					i32.const str 0
+					i32.sub
+					local.set $hex_val
+				else
+
+					; if char >= 'A' and char <= 'F'
+					local.get $hex_char
+					i32.const ascii A
+					i32.ge_s
+					if i32
+						local.get $hex_char
+						i32.const ascii F
+						i32.le_s
+						i32.eqz
+						i32.eqz
+					else
+						i32.const sleb 0
+					end
+					if NO_RETURN
+
+						; val = char - 'A' + 10
+						local.get $hex_char
+						i32.const ascii A
+						i32.sub
+						i32.const sleb 10
+						i32.add
+						local.set $hex_val
+					else
+
+						; if char >= 'a' and char <= 'f'
+						local.get $hex_char
+						i32.const ascii a
+						i32.ge_s
+						if i32
+							local.get $hex_char
+							i32.const ascii f
+							i32.le_s
+							i32.eqz
+							i32.eqz
+						else
+							i32.const sleb 0
+						end
+						if NO_RETURN
+
+							; val = char - 'a' + 10
+							local.get $hex_char
+							i32.const ascii a
+							i32.sub
+							i32.const sleb 10
+							i32.add
+							local.set $hex_val
+						else
+
+							; error(index, 1)
+							local.get $index
+							i32.const sleb 1
+							call $f_error
+						end
+					end
+				end
+
+				; result = result * 16 + val
+				local.get $hex_result
+				i32.const sleb 16
+				i32.mul
+				local.get $hex_val
+				i32.add
+				local.set $hex_result
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; if isWhiteSpace(index)
+				local.get $index
+				call $f_isWhiteSpace
+				if NO_RETURN
+
+					; break
+					br ^digits_done
+				end
+
+				; repeat
+				br ^digits_loop
+			end
+		end
+
+		; writeByte(result)
+		local.get $hex_result
+		call $f_writeByte
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromBin(index)
+
+		; extra locals = 3 (start at 0)
+		uleb 1 uleb 3 i32
+
+		; local names
+		#bin_result 1
+		#bin_val 2
+		#bin_char 3
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; result = 0
+		i32.const sleb 0
+		local.set $bin_result
+
+		; val = 0
+		i32.const sleb 0
+		local.set $bin_val
+
+		; char = 0
+		i32.const sleb 0
+		local.set $bin_char
+
+		; while true
+		block NO_RETURN @digits_done
+			loop NO_RETURN @digits_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^digits_done
+
+				; char = memory[index]
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				local.set $bin_char
+
+				; if char == '0' or char == '1'
+				local.get $bin_char
+				i32.const str 0
+				i32.eq
+				if i32
+					i32.const sleb 1
+				else
+					local.get $bin_char
+					i32.const str 1
+					i32.eq
+					i32.eqz
+					i32.eqz
+				end
+				if NO_RETURN
+
+					; val = char - '0'
+					local.get $bin_char
+					i32.const str 0
+					i32.sub
+					local.set $bin_val
+				else
+
+					; error(index, 2)
+					local.get $index
+					i32.const sleb 2
+					call $f_error
+				end
+
+				; result = result << 1 | val
+				local.get $bin_result
+				i32.const sleb 1
+				i32.shl
+				local.get $bin_val
+				i32.or
+				local.set $bin_result
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; if isWhiteSpace(index)
+				local.get $index
+				call $f_isWhiteSpace
+				if NO_RETURN
+
+					; break
+					br ^digits_done
+				end
+
+				; repeat
+				br ^digits_loop
+			end
+		end
+
+		; writeByte(result)
+		local.get $bin_result
+		call $f_writeByte
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromString(index)
+
+		; extra locals = 0 (start at 0)
+		uleb 0
+
+		; local names
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; while true
+		block NO_RETURN @text_done
+			loop NO_RETURN @text_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^text_done
+
+				; writeSectionChar(memory[index])
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				call $f_writeSectionChar
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; if isWhiteSpace(index)
+				local.get $index
+				call $f_isWhiteSpace
+				if NO_RETURN
+
+					; break
+					br ^text_done
+				end
+
+				; repeat
+				br ^text_loop
+			end
+		end
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromUleb(index)
+
+		; extra locals = 2 (start at 0)
+		uleb 1 uleb 2 i32
+
+		; local names
+		#uleb_result 1
+		#uleb_digit 2
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; result = 0
+		i32.const sleb 0
+		local.set $uleb_result
+
+		; digit = 0
+		i32.const sleb 0
+		local.set $uleb_digit
+
+		; while true
+		block NO_RETURN @digits_done
+			loop NO_RETURN @digits_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^digits_done
+
+				; Only decimal digits are valid ULEB input (error 9).
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const ascii 0
+				i32.lt_u
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const ascii 9
+				i32.gt_u
+				i32.or
+				if NO_RETURN
+					local.get $index
+					i32.const sleb 9
+					call $f_error
+				end
+
+				; digit = memory[index] - '0'
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 0
+				i32.sub
+				local.set $uleb_digit
+
+				; result = result * 10 + digit
+				local.get $uleb_result
+				i32.const sleb 10
+				i32.mul
+				local.get $uleb_digit
+				i32.add
+				local.set $uleb_result
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; Stop at whitespace or the zero sentinel after the final digit.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				local.get $index
+				call $f_isWhiteSpace
+				i32.or
+				if NO_RETURN
+
+					; break
+					br ^digits_done
+				end
+
+				; repeat
+				br ^digits_loop
+			end
+		end
+
+		; writeByte(result)
+		local.get $uleb_result
+		call $f_writeByte
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; setVariable(index)
+
+		; extra locals = 5 (start at 0)
+		uleb 1 uleb 5 i32
+
+		; local names
+		#setVar_name_start 1
+		#setVar_name_length 2
+		#setVar_loop_index 3
+		#setVar_result 4
+		#setVar_digit 5
+
+		; variable_name_start = index
+		local.get $index
+		local.set $setVar_name_start
+
+		; variable_name_length = 0
+		i32.const sleb 0
+		local.set $setVar_name_length
+
+		; loop_index = 0
+		i32.const sleb 0
+		local.set $setVar_loop_index
+
+		; result = 0
+		i32.const sleb 0
+		local.set $setVar_result
+
+		; Read the symbol name.
+		block NO_RETURN @name_done
+			loop NO_RETURN @name_loop
+				; Stop before whitespace or the end of source.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^name_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^name_done
+
+				; Advance the source index and name length together.
+				local.get $setVar_name_length
+				i32.const sleb 1
+				i32.add
+				local.set $setVar_name_length
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^name_loop
+			end
+		end
+
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; while true
+		block NO_RETURN @value_done
+			loop NO_RETURN @value_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^value_done
+
+				; digit = memory[index] - '0'
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 0
+				i32.sub
+				local.set $setVar_digit
+
+				; result = result * 10 + digit
+				local.get $setVar_result
+				i32.const sleb 10
+				i32.mul
+				local.get $setVar_digit
+				i32.add
+				local.set $setVar_result
+
+				; index += 1
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+
+				; if isWhiteSpace(index)
+				local.get $index
+				call $f_isWhiteSpace
+				if NO_RETURN
+
+					; break
+					br ^value_done
+				end
+
+				; repeat
+				br ^value_loop
+			end
+		end
+
+		; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_names[symbol_names_stack_index] = SYMBOL_VARIABLE
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_names[symbol_names_stack_index] = variable_name_length
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		local.get $setVar_name_length
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; while loop_index < variable_name_length
+		block NO_RETURN @copy_done
+			loop NO_RETURN @copy_loop
+				local.get $setVar_loop_index
+				local.get $setVar_name_length
+				i32.lt_s
+				i32.eqz
+				br_if ^copy_done
+
+				; symbol_names[symbol_names_stack_index] = memory[variable_name_start + loop_index]
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				local.get $setVar_name_start
+				local.get $setVar_loop_index
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.store uleb 2 uleb 0
+
+				; symbol_names_stack_index += 1
+				i32.const $symbol_names_stack_index
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.const sleb 1
+				i32.add
+				i32.store uleb 2 uleb 0
+
+				; loop_index += 1
+				local.get $setVar_loop_index
+				i32.const sleb 1
+				i32.add
+				local.set $setVar_loop_index
+
+				; repeat
+				br ^copy_loop
+			end
+		end
+
+		; symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_values
+		i32.add
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_values_stack_index += 1
+		i32.const $symbol_values_stack_index
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_values[symbol_values_stack_index] = result
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_values
+		i32.add
+		local.get $setVar_result
+		i32.store uleb 2 uleb 0
+
+		; symbol_values_stack_index += 1
+		i32.const $symbol_values_stack_index
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; LAST_SYMBOL_ID += 1
+		i32.const $LAST_SYMBOL_ID
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; getVariable(index)
+
+		; extra locals = 10 (start at 0)
+		uleb 1 uleb 10 i32
+
+		; local names
+		#gv_name_start 1
+		#gv_name_length 2
+		#gv_vname_pointer 3
+		#gv_id 4
+		#gv_matches 5
+		#gv_stored_length 6
+		#gv_symbol_kind 7
+		#gv_loop_index 8
+		#gv_value_pointer 9
+		#gv_value 10
+
+		; variable_name_start = index
+		local.get $index
+		local.set $gv_name_start
+
+		; variable_name_length = 0
+		i32.const sleb 0
+		local.set $gv_name_length
+
+		; vname_pointer = 0
+		i32.const sleb 0
+		local.set $gv_vname_pointer
+
+		; variable_id = 0
+		i32.const sleb 0
+		local.set $gv_id
+
+		; matches = 0
+		i32.const sleb 0
+		local.set $gv_matches
+
+		; stored_name_length = 0
+		i32.const sleb 0
+		local.set $gv_stored_length
+
+		; Read the symbol name.
+		block NO_RETURN @name_done
+			loop NO_RETURN @name_loop
+				; Stop before whitespace or the end of source.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^name_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^name_done
+
+				; Advance the source index and name length together.
+				local.get $gv_name_length
+				i32.const sleb 1
+				i32.add
+				local.set $gv_name_length
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^name_loop
+			end
+		end
+
+
+		; while vname_pointer < symbol_names_stack_index
+		block NO_RETURN @symbols_done
+			loop NO_RETURN @symbols_loop
+				local.get $gv_vname_pointer
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.lt_s
+				i32.eqz
+				br_if ^symbols_done
+
+				; variable_id = symbol_names[vname_pointer]
+				local.get $gv_vname_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gv_id
+
+				; vname_pointer += 1
+				local.get $gv_vname_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gv_vname_pointer
+
+				; symbol_kind = symbol_names[vname_pointer]
+				local.get $gv_vname_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gv_symbol_kind
+
+				; vname_pointer += 1
+				local.get $gv_vname_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gv_vname_pointer
+
+				; stored_name_length = symbol_names[vname_pointer]
+				local.get $gv_vname_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gv_stored_length
+
+				; vname_pointer += 1
+				local.get $gv_vname_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gv_vname_pointer
+
+				; matches = 1
+				i32.const sleb 1
+				local.set $gv_matches
+
+				; if stored_name_length != variable_name_length
+				local.get $gv_stored_length
+				local.get $gv_name_length
+				i32.ne
+				if NO_RETURN
+
+					; matches = 0
+					i32.const sleb 0
+					local.set $gv_matches
+				end
+
+				; if symbol_kind != SYMBOL_VARIABLE
+				local.get $gv_symbol_kind
+				i32.const sleb 0
+				i32.ne
+				if NO_RETURN
+
+					; matches = 0
+					i32.const sleb 0
+					local.set $gv_matches
+				end
+
+				; loop_index = 0
+				i32.const sleb 0
+				local.set $gv_loop_index
+
+				; while loop_index < stored_name_length
+				block NO_RETURN @compare_done
+					loop NO_RETURN @compare_loop
+						local.get $gv_loop_index
+						local.get $gv_stored_length
+						i32.lt_s
+						i32.eqz
+						br_if ^compare_done
+
+						; if matches == 1
+						local.get $gv_matches
+						i32.const sleb 1
+						i32.eq
+						if NO_RETURN
+
+							; if memory[variable_name_start + loop_index] != symbol_names[vname_pointer + loop_index]
+							local.get $gv_name_start
+							local.get $gv_loop_index
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $gv_vname_pointer
+							local.get $gv_loop_index
+							i32.add
+							i32.const sleb 2
+							i32.shl
+							i32.const $symbol_names
+							i32.add
+							i32.load uleb 2 uleb 0
+							i32.ne
+							if NO_RETURN
+
+								; matches = 0
+								i32.const sleb 0
+								local.set $gv_matches
+							end
+						end
+
+						; loop_index += 1
+						local.get $gv_loop_index
+						i32.const sleb 1
+						i32.add
+						local.set $gv_loop_index
+
+						; repeat
+						br ^compare_loop
+					end
+				end
+
+				; if matches == 1
+				local.get $gv_matches
+				i32.const sleb 1
+				i32.eq
+				if NO_RETURN
+
+					; value_pointer = 0
+					i32.const sleb 0
+					local.set $gv_value_pointer
+
+					; while value_pointer < symbol_values_stack_index
+					block NO_RETURN @values_done
+						loop NO_RETURN @values_loop
+							local.get $gv_value_pointer
+							i32.const $symbol_values_stack_index
+							i32.load uleb 2 uleb 0
+							i32.lt_s
+							i32.eqz
+							br_if ^values_done
+
+							; if symbol_values[value_pointer] == variable_id
+							local.get $gv_value_pointer
+							i32.const sleb 2
+							i32.shl
+							i32.const $symbol_values
+							i32.add
+							i32.load uleb 2 uleb 0
+							local.get $gv_id
+							i32.eq
+							if NO_RETURN
+
+								; value = symbol_values[value_pointer + 1]
+								local.get $gv_value_pointer
+								i32.const sleb 1
+								i32.add
+								i32.const sleb 2
+								i32.shl
+								i32.const $symbol_values
+								i32.add
+								i32.load uleb 2 uleb 0
+								local.set $gv_value
+
+								; writeByte(value)
+								local.get $gv_value
+								call $f_writeByte
+
+								; return index
+								local.get $index
+								return
+							end
+
+							; value_pointer += 2
+							local.get $gv_value_pointer
+							i32.const sleb 2
+							i32.add
+							local.set $gv_value_pointer
+
+							; repeat
+							br ^values_loop
+						end
+					end
+				end
+
+				; vname_pointer += stored_name_length
+				local.get $gv_vname_pointer
+				local.get $gv_stored_length
+				i32.add
+				local.set $gv_vname_pointer
+
+				; repeat
+				br ^symbols_loop
+			end
+		end
+
+		; error(variable_name_start, 3)
+		local.get $gv_name_start
+		i32.const sleb 3
+		call $f_error
+
+		; return 0
+		i32.const sleb 0
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; setLabel(index)
+
+		; extra locals = 3 (start at 0)
+		uleb 1 uleb 3 i32
+
+		; local names
+		#sl_label_start 1
+		#sl_label_length 2
+		#sl_loop_index 3
+
+		; label_start = index
+		local.get $index
+		local.set $sl_label_start
+
+		; label_length = 0
+		i32.const sleb 0
+		local.set $sl_label_length
+
+		; loop_index = 0
+		i32.const sleb 0
+		local.set $sl_loop_index
+
+		; Read the symbol name.
+		block NO_RETURN @name_done
+			loop NO_RETURN @name_loop
+				; Stop before whitespace or the end of source.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^name_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^name_done
+
+				; Advance the source index and name length together.
+				local.get $sl_label_length
+				i32.const sleb 1
+				i32.add
+				local.set $sl_label_length
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^name_loop
+			end
+		end
+
+
+		; if label_length == 0 or LABEL_SCOPE == 0
+		local.get $sl_label_length
+		i32.const sleb 0
+		i32.eq
+		if i32
+			i32.const sleb 1
+		else
+			i32.const $LABEL_SCOPE
+			i32.load uleb 2 uleb 0
+			i32.const sleb 0
+			i32.eq
+			i32.eqz
+			i32.eqz
+		end
+		if NO_RETURN
+
+			; error(label_start, 5)
+			local.get $sl_label_start
+			i32.const sleb 5
+			call $f_error
+		end
+
+		; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_names[symbol_names_stack_index] = SYMBOL_LABEL
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		i32.const sleb 1
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_names[symbol_names_stack_index] = label_length
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_names
+		i32.add
+		local.get $sl_label_length
+		i32.store uleb 2 uleb 0
+
+		; symbol_names_stack_index += 1
+		i32.const $symbol_names_stack_index
+		i32.const $symbol_names_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; while loop_index < label_length
+		block NO_RETURN @copy_done
+			loop NO_RETURN @copy_loop
+				local.get $sl_loop_index
+				local.get $sl_label_length
+				i32.lt_s
+				i32.eqz
+				br_if ^copy_done
+
+				; symbol_names[symbol_names_stack_index] = memory[label_start + loop_index]
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				local.get $sl_label_start
+				local.get $sl_loop_index
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.store uleb 2 uleb 0
+
+				; symbol_names_stack_index += 1
+				i32.const $symbol_names_stack_index
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.const sleb 1
+				i32.add
+				i32.store uleb 2 uleb 0
+
+				; loop_index += 1
+				local.get $sl_loop_index
+				i32.const sleb 1
+				i32.add
+				local.set $sl_loop_index
+
+				; repeat
+				br ^copy_loop
+			end
+		end
+
+		; symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_values
+		i32.add
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_values_stack_index += 1
+		i32.const $symbol_values_stack_index
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; symbol_values[symbol_values_stack_index] = LABEL_SCOPE
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 2
+		i32.shl
+		i32.const $symbol_values
+		i32.add
+		i32.const $LABEL_SCOPE
+		i32.load uleb 2 uleb 0
+		i32.store uleb 2 uleb 0
+
+		; symbol_values_stack_index += 1
+		i32.const $symbol_values_stack_index
+		i32.const $symbol_values_stack_index
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; LAST_SYMBOL_ID += 1
+		i32.const $LAST_SYMBOL_ID
+		i32.const $LAST_SYMBOL_ID
+		i32.load uleb 2 uleb 0
+		i32.const sleb 1
+		i32.add
+		i32.store uleb 2 uleb 0
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; getLabel(index)
+
+		; extra locals = 11 (start at 0)
+		uleb 1 uleb 11 i32
+
+		; local names
+		#gl_label_start 1
+		#gl_label_length 2
+		#gl_name_pointer 3
+		#gl_label_id 4
+		#gl_stored_length 5
+		#gl_matches 6
+		#gl_symbol_kind 7
+		#gl_loop_index 8
+		#gl_value_pointer 9
+		#gl_label_scope 10
+		#gl_branch_depth 11
+
+		; label_start = index
+		local.get $index
+		local.set $gl_label_start
+
+		; label_length = 0
+		i32.const sleb 0
+		local.set $gl_label_length
+
+		; name_pointer = 0
+		i32.const sleb 0
+		local.set $gl_name_pointer
+
+		; label_id = 0
+		i32.const sleb 0
+		local.set $gl_label_id
+
+		; stored_length = 0
+		i32.const sleb 0
+		local.set $gl_stored_length
+
+		; matches = 0
+		i32.const sleb 0
+		local.set $gl_matches
+
+		; Read the symbol name.
+		block NO_RETURN @name_done
+			loop NO_RETURN @name_loop
+				; Stop before whitespace or the end of source.
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				i32.eqz
+				br_if ^name_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^name_done
+
+				; Advance the source index and name length together.
+				local.get $gl_label_length
+				i32.const sleb 1
+				i32.add
+				local.set $gl_label_length
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^name_loop
+			end
+		end
+
+
+		; while name_pointer < symbol_names_stack_index
+		block NO_RETURN @symbols_done
+			loop NO_RETURN @symbols_loop
+				local.get $gl_name_pointer
+				i32.const $symbol_names_stack_index
+				i32.load uleb 2 uleb 0
+				i32.lt_s
+				i32.eqz
+				br_if ^symbols_done
+
+				; label_id = symbol_names[name_pointer]
+				local.get $gl_name_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gl_label_id
+
+				; name_pointer += 1
+				local.get $gl_name_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gl_name_pointer
+
+				; symbol_kind = symbol_names[name_pointer]
+				local.get $gl_name_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gl_symbol_kind
+
+				; name_pointer += 1
+				local.get $gl_name_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gl_name_pointer
+
+				; stored_length = symbol_names[name_pointer]
+				local.get $gl_name_pointer
+				i32.const sleb 2
+				i32.shl
+				i32.const $symbol_names
+				i32.add
+				i32.load uleb 2 uleb 0
+				local.set $gl_stored_length
+
+				; name_pointer += 1
+				local.get $gl_name_pointer
+				i32.const sleb 1
+				i32.add
+				local.set $gl_name_pointer
+
+				; matches = 1
+				i32.const sleb 1
+				local.set $gl_matches
+
+				; if stored_length != label_length
+				local.get $gl_stored_length
+				local.get $gl_label_length
+				i32.ne
+				if NO_RETURN
+
+					; matches = 0
+					i32.const sleb 0
+					local.set $gl_matches
+				end
+
+				; if symbol_kind != SYMBOL_LABEL
+				local.get $gl_symbol_kind
+				i32.const sleb 1
+				i32.ne
+				if NO_RETURN
+
+					; matches = 0
+					i32.const sleb 0
+					local.set $gl_matches
+				end
+
+				; if label_id < LABEL_FIRST_SYMBOL_ID
+				local.get $gl_label_id
+				i32.const $LABEL_FIRST_SYMBOL_ID
+				i32.load uleb 2 uleb 0
+				i32.lt_s
+				if NO_RETURN
+
+					; matches = 0
+					i32.const sleb 0
+					local.set $gl_matches
+				end
+
+				; loop_index = 0
+				i32.const sleb 0
+				local.set $gl_loop_index
+
+				; while loop_index < stored_length
+				block NO_RETURN @compare_done
+					loop NO_RETURN @compare_loop
+						local.get $gl_loop_index
+						local.get $gl_stored_length
+						i32.lt_s
+						i32.eqz
+						br_if ^compare_done
+
+						; if matches == 1
+						local.get $gl_matches
+						i32.const sleb 1
+						i32.eq
+						if NO_RETURN
+
+							; if memory[label_start + loop_index] != symbol_names[name_pointer + loop_index]
+							local.get $gl_label_start
+							local.get $gl_loop_index
+							i32.add
+							i32.load8_u uleb 0 uleb 0
+							local.get $gl_name_pointer
+							local.get $gl_loop_index
+							i32.add
+							i32.const sleb 2
+							i32.shl
+							i32.const $symbol_names
+							i32.add
+							i32.load uleb 2 uleb 0
+							i32.ne
+							if NO_RETURN
+
+								; matches = 0
+								i32.const sleb 0
+								local.set $gl_matches
+							end
+						end
+
+						; loop_index += 1
+						local.get $gl_loop_index
+						i32.const sleb 1
+						i32.add
+						local.set $gl_loop_index
+
+						; repeat
+						br ^compare_loop
+					end
+				end
+
+				; if matches == 1
+				local.get $gl_matches
+				i32.const sleb 1
+				i32.eq
+				if NO_RETURN
+
+					; value_pointer = 0
+					i32.const sleb 0
+					local.set $gl_value_pointer
+
+					; while value_pointer < symbol_values_stack_index
+					block NO_RETURN @values_done
+						loop NO_RETURN @values_loop
+							local.get $gl_value_pointer
+							i32.const $symbol_values_stack_index
+							i32.load uleb 2 uleb 0
+							i32.lt_s
+							i32.eqz
+							br_if ^values_done
+
+							; if symbol_values[value_pointer] == label_id
+							local.get $gl_value_pointer
+							i32.const sleb 2
+							i32.shl
+							i32.const $symbol_values
+							i32.add
+							i32.load uleb 2 uleb 0
+							local.get $gl_label_id
+							i32.eq
+							if NO_RETURN
+
+								; label_scope = symbol_values[value_pointer + 1]
+								local.get $gl_value_pointer
+								i32.const sleb 1
+								i32.add
+								i32.const sleb 2
+								i32.shl
+								i32.const $symbol_values
+								i32.add
+								i32.load uleb 2 uleb 0
+								local.set $gl_label_scope
+
+								; branch_depth = LABEL_SCOPE - label_scope
+								i32.const $LABEL_SCOPE
+								i32.load uleb 2 uleb 0
+								local.get $gl_label_scope
+								i32.sub
+								local.set $gl_branch_depth
+
+								; if branch_depth < 0
+								local.get $gl_branch_depth
+								i32.const sleb 0
+								i32.lt_s
+								if NO_RETURN
+
+									; error(label_start, 6)
+									local.get $gl_label_start
+									i32.const sleb 6
+									call $f_error
+								end
+
+								; writeByte(branch_depth)
+								local.get $gl_branch_depth
+								call $f_writeByte
+
+								; return index
+								local.get $index
+								return
+							end
+
+							; value_pointer += 2
+							local.get $gl_value_pointer
+							i32.const sleb 2
+							i32.add
+							local.set $gl_value_pointer
+
+							; repeat
+							br ^values_loop
+						end
+					end
+				end
+
+				; name_pointer += stored_length
+				local.get $gl_name_pointer
+				local.get $gl_stored_length
+				i32.add
+				local.set $gl_name_pointer
+
+				; repeat
+				br ^symbols_loop
+			end
+		end
+
+		; error(label_start, 5)
+		local.get $gl_label_start
+		i32.const sleb 5
+		call $f_error
+
+		; return 0
+		i32.const sleb 0
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; parseCmd(index)
+
+		; extra locals = 11 (start at 0)
+		uleb 1 uleb 11 i32
+
+		; local names
+		#cmd_i32_arithmatic 1
+		#cmd_i32_comparison 2
+		#cmd_i64_arithmatic 3
+		#cmd_i64_comparison 4
+		#cmd_f32_arithmatic 5
+		#cmd_f32_comparison 6
+		#cmd_f64_arithmatic 7
+		#cmd_f64_comparison 8
+		#cmd_type_arithmatic 9
+		#cmd_type_comparison 10
+		#cmd_type 11
+
+		; i32_arithmatic = 106
+		i32.const ascii j
+		local.set $cmd_i32_arithmatic
+
+		; i32_comparison = 69 + 1
+		i32.const ascii E
+		i32.const sleb 1
+		i32.add
+		local.set $cmd_i32_comparison
+
+		; i64_arithmatic = 124
+		i32.const ascii |
+		local.set $cmd_i64_arithmatic
+
+		; i64_comparison = 80 + 1
+		i32.const ascii P
+		i32.const sleb 1
+		i32.add
+		local.set $cmd_i64_comparison
+
+		; f32_arithmatic = 146
+		i32.const sleb 146
+		local.set $cmd_f32_arithmatic
+
+		; f32_comparison = 91
+		i32.const ascii [
+		local.set $cmd_f32_comparison
+
+		; f64_arithmatic = 160
+		i32.const sleb 160
+		local.set $cmd_f64_arithmatic
+
+		; f64_comparison = 97
+		i32.const ascii a
+		local.set $cmd_f64_comparison
+
+		; type_arithmatic = 0
+		i32.const sleb 0
+		local.set $cmd_type_arithmatic
+
+		; type_comparison = 0
+		i32.const sleb 0
+		local.set $cmd_type_comparison
+
+		; type = 10
+		i32.const sleb 10
+		local.set $cmd_type
+
+		; if startsWith(index, 'i32.')
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii i
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			i32.const str 3
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 2
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					i32.const str .
+					i32.eq
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		if NO_RETURN
+
+			; type = 0
+			i32.const sleb 0
+			local.set $cmd_type
+
+			; type_arithmatic = i32_arithmatic
+			local.get $cmd_i32_arithmatic
+			local.set $cmd_type_arithmatic
+
+			; type_comparison = i32_comparison
+			local.get $cmd_i32_comparison
+			local.set $cmd_type_comparison
+		end
+
+		; if startsWith(index, 'i64.')
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii i
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			i32.const str 6
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 4
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					i32.const str .
+					i32.eq
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		if NO_RETURN
+
+			; type = 1
+			i32.const sleb 1
+			local.set $cmd_type
+
+			; type_arithmatic = i64_arithmatic
+			local.get $cmd_i64_arithmatic
+			local.set $cmd_type_arithmatic
+
+			; type_comparison = i64_comparison
+			local.get $cmd_i64_comparison
+			local.set $cmd_type_comparison
+		end
+
+		; if startsWith(index, 'f32.')
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii f
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			i32.const str 3
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 2
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					i32.const str .
+					i32.eq
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		if NO_RETURN
+
+			; type = 2
+			i32.const sleb 2
+			local.set $cmd_type
+
+			; type_arithmatic = f32_arithmatic
+			local.get $cmd_f32_arithmatic
+			local.set $cmd_type_arithmatic
+
+			; type_comparison = f32_comparison
+			local.get $cmd_f32_comparison
+			local.set $cmd_type_comparison
+		end
+
+		; if startsWith(index, 'f64.')
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii f
+		i32.eq
+		if i32
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			i32.load8_u uleb 0 uleb 0
+			i32.const str 6
+			i32.eq
+			if i32
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				i32.load8_u uleb 0 uleb 0
+				i32.const str 4
+				i32.eq
+				if i32
+					local.get $index
+					i32.const sleb 3
+					i32.add
+					i32.load8_u uleb 0 uleb 0
+					i32.const str .
+					i32.eq
+					i32.eqz
+					i32.eqz
+				else
+					i32.const sleb 0
+				end
+			else
+				i32.const sleb 0
+			end
+		else
+			i32.const sleb 0
+		end
+		if NO_RETURN
+
+			; type = 3
+			i32.const sleb 3
+			local.set $cmd_type
+
+			; type_arithmatic = f64_arithmatic
+			local.get $cmd_f64_arithmatic
+			local.set $cmd_type_arithmatic
+
+			; type_comparison = f64_comparison
+			local.get $cmd_f64_comparison
+			local.set $cmd_type_comparison
+		end
+
+		; if wordEquals(index, 'block')
+		local.get $index
+		i32.const ascii b
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii c
+		i32.const ascii k
+		call $f_equals5
+		if NO_RETURN
+
+			; writeSectionChar(2)
+			i32.const sleb 2
+			call $f_writeSectionChar
+
+			; LABEL_SCOPE += 1
+			i32.const $LABEL_SCOPE
+			i32.const $LABEL_SCOPE
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+
+			; return index + 5
+			local.get $index
+			i32.const sleb 5
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'loop')
+		local.get $index
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii o
+		i32.const ascii p
+		call $f_equals4
+		if NO_RETURN
+
+			; writeSectionChar(3)
+			i32.const sleb 3
+			call $f_writeSectionChar
+
+			; LABEL_SCOPE += 1
+			i32.const $LABEL_SCOPE
+			i32.const $LABEL_SCOPE
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+
+			; return index + 4
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'if')
+		local.get $index
+		i32.const ascii i
+		i32.const ascii f
+		call $f_equals2
+		if NO_RETURN
+
+			; writeSectionChar(4)
+			i32.const sleb 4
+			call $f_writeSectionChar
+
+			; LABEL_SCOPE += 1
+			i32.const $LABEL_SCOPE
+			i32.const $LABEL_SCOPE
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+
+			; return index + 2
+			local.get $index
+			i32.const sleb 2
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'else')
+		local.get $index
+		i32.const ascii e
+		i32.const ascii l
+		i32.const ascii s
+		i32.const ascii e
+		call $f_equals4
+		if NO_RETURN
+
+			; writeSectionChar(5)
+			i32.const sleb 5
+			call $f_writeSectionChar
+
+			; return index + 4
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'end')
+		local.get $index
+		i32.const ascii e
+		i32.const ascii n
+		i32.const ascii d
+		call $f_equals3
+		if NO_RETURN
+
+			; writeSectionChar(11)
+			i32.const sleb 11
+			call $f_writeSectionChar
+
+			; if LABEL_SCOPE > 0
+			i32.const $LABEL_SCOPE
+			i32.load uleb 2 uleb 0
+			i32.const sleb 0
+			i32.gt_s
+			if NO_RETURN
+
+				; LABEL_SCOPE -= 1
+				i32.const $LABEL_SCOPE
+				i32.const $LABEL_SCOPE
+				i32.load uleb 2 uleb 0
+				i32.const sleb 1
+				i32.sub
+				i32.store uleb 2 uleb 0
+			end
+
+			; return index + 3
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'br')
+		local.get $index
+		i32.const ascii b
+		i32.const ascii r
+		call $f_equals2
+		if NO_RETURN
+
+			; writeSectionChar(12)
+			i32.const sleb 12
+			call $f_writeSectionChar
+
+			; return index + 2
+			local.get $index
+			i32.const sleb 2
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'br_if')
+		local.get $index
+		i32.const ascii b
+		i32.const ascii r
+		i32.const ascii _
+		i32.const ascii i
+		i32.const ascii f
+		call $f_equals5
+		if NO_RETURN
+
+			; writeSectionChar(13)
+			i32.const sleb 13
+			call $f_writeSectionChar
+
+			; return index + 5
+			local.get $index
+			i32.const sleb 5
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'return')
+		local.get $index
+		i32.const ascii r
+		i32.const ascii e
+		i32.const ascii t
+		i32.const ascii u
+		i32.const ascii r
+		i32.const ascii n
+		call $f_equals6
+		if NO_RETURN
+
+			; writeSectionChar(15)
+			i32.const sleb 15
+			call $f_writeSectionChar
+
+			; return index + 6
+			local.get $index
+			i32.const sleb 6
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'call')
+		local.get $index
+		i32.const ascii c
+		i32.const ascii a
+		i32.const ascii l
+		i32.const ascii l
+		call $f_equals4
+		if NO_RETURN
+
+			; writeSectionChar(16)
+			i32.const sleb 16
+			call $f_writeSectionChar
+
+			; return index + 4
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'call_indirect')
+		local.get $index
+		i32.const ascii c
+		i32.const ascii a
+		i32.const ascii l
+		i32.const ascii l
+		i32.const ascii _
+		i32.const ascii i
+		i32.const ascii n
+		i32.const ascii d
+		i32.const ascii i
+		i32.const ascii r
+		i32.const ascii e
+		i32.const ascii c
+		i32.const ascii t
+		call $f_equals13
+		if NO_RETURN
+
+			; writeSectionChar(17)
+			i32.const sleb 17
+			call $f_writeSectionChar
+
+			; return index + 13
+			local.get $index
+			i32.const sleb 13
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'drop')
+		local.get $index
+		i32.const ascii d
+		i32.const ascii r
+		i32.const ascii o
+		i32.const ascii p
+		call $f_equals4
+		if NO_RETURN
+
+			; writeSectionChar(26)
+			i32.const sleb 26
+			call $f_writeSectionChar
+
+			; return index + 4
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'local.get')
+		local.get $index
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii c
+		i32.const ascii a
+		i32.const ascii l
+		i32.const str .
+		i32.const ascii g
+		i32.const ascii e
+		i32.const ascii t
+		call $f_equals9
+		if NO_RETURN
+
+			; writeSectionChar(32)
+			i32.const sleb 32
+			call $f_writeSectionChar
+
+			; return index + 9
+			local.get $index
+			i32.const sleb 9
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'local.set')
+		local.get $index
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii c
+		i32.const ascii a
+		i32.const ascii l
+		i32.const str .
+		i32.const ascii s
+		i32.const ascii e
+		i32.const ascii t
+		call $f_equals9
+		if NO_RETURN
+
+			; writeSectionChar(33)
+			i32.const sleb 33
+			call $f_writeSectionChar
+
+			; return index + 9
+			local.get $index
+			i32.const sleb 9
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'local.tee')
+		local.get $index
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii c
+		i32.const ascii a
+		i32.const ascii l
+		i32.const str .
+		i32.const ascii t
+		i32.const ascii e
+		i32.const ascii e
+		call $f_equals9
+		if NO_RETURN
+
+			; writeSectionChar(34)
+			i32.const sleb 34
+			call $f_writeSectionChar
+
+			; return index + 9
+			local.get $index
+			i32.const sleb 9
+			i32.add
+			return
+		end
+
+		; if type != 10
+		local.get $cmd_type
+		i32.const sleb 10
+		i32.ne
+		if NO_RETURN
+
+			; index += 4
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			local.set $index
+
+			; if wordEquals(index, 'const')
+			local.get $index
+			i32.const ascii c
+			i32.const ascii o
+			i32.const ascii n
+			i32.const ascii s
+			i32.const ascii t
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(65 + type)
+				i32.const ascii A
+				local.get $cmd_type
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'add')
+			local.get $index
+			i32.const ascii a
+			i32.const ascii d
+			i32.const ascii d
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 0)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 0
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'sub')
+			local.get $index
+			i32.const ascii s
+			i32.const ascii u
+			i32.const ascii b
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 1)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 1
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'mul')
+			local.get $index
+			i32.const ascii m
+			i32.const ascii u
+			i32.const ascii l
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 2)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 2
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'div_s')
+			local.get $index
+			i32.const ascii d
+			i32.const ascii i
+			i32.const ascii v
+			i32.const ascii _
+			i32.const ascii s
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 3)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 3
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'div_u')
+			local.get $index
+			i32.const ascii d
+			i32.const ascii i
+			i32.const ascii v
+			i32.const ascii _
+			i32.const ascii u
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 4)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 4
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'rem_s')
+			local.get $index
+			i32.const ascii r
+			i32.const ascii e
+			i32.const ascii m
+			i32.const ascii _
+			i32.const ascii s
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 5)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 5
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'rem_u')
+			local.get $index
+			i32.const ascii r
+			i32.const ascii e
+			i32.const ascii m
+			i32.const ascii _
+			i32.const ascii u
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 6)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 6
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'and')
+			local.get $index
+			i32.const ascii a
+			i32.const ascii n
+			i32.const ascii d
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 7)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 7
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'or')
+			local.get $index
+			i32.const ascii o
+			i32.const ascii r
+			call $f_equals2
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 8)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 8
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 2
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'xor')
+			local.get $index
+			i32.const ascii x
+			i32.const ascii o
+			i32.const ascii r
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 9)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 9
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'shl')
+			local.get $index
+			i32.const ascii s
+			i32.const ascii h
+			i32.const ascii l
+			call $f_equals3
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 10)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 10
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'shr_s')
+			local.get $index
+			i32.const ascii s
+			i32.const ascii h
+			i32.const ascii r
+			i32.const ascii _
+			i32.const ascii s
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 11)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 11
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'shr_u')
+			local.get $index
+			i32.const ascii s
+			i32.const ascii h
+			i32.const ascii r
+			i32.const ascii _
+			i32.const ascii u
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 12)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 12
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'rotl')
+			local.get $index
+			i32.const ascii r
+			i32.const ascii o
+			i32.const ascii t
+			i32.const ascii l
+			call $f_equals4
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 13)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 13
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 4
+				local.get $index
+				i32.const sleb 4
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'rotr')
+			local.get $index
+			i32.const ascii r
+			i32.const ascii o
+			i32.const ascii t
+			i32.const ascii r
+			call $f_equals4
+			if NO_RETURN
+
+				; writeSectionChar(type_arithmatic + 14)
+				local.get $cmd_type_arithmatic
+				i32.const sleb 14
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 4
+				local.get $index
+				i32.const sleb 4
+				i32.add
+				return
+			end
+
+			; if (type == 0 or type == 1) and wordEquals(index, 'eqz')
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 1
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if i32
+				local.get $index
+				i32.const ascii e
+				i32.const ascii q
+				i32.const ascii z
+				call $f_equals3
+				i32.eqz
+				i32.eqz
+			else
+				i32.const sleb 0
+			end
+			if NO_RETURN
+
+				; writeSectionChar(type_comparison - 1)
+				local.get $cmd_type_comparison
+				i32.const sleb 1
+				i32.sub
+				call $f_writeSectionChar
+
+				; return index + 3
+				local.get $index
+				i32.const sleb 3
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'eq')
+			local.get $index
+			i32.const ascii e
+			i32.const ascii q
+			call $f_equals2
+			if NO_RETURN
+
+				; writeSectionChar(type_comparison + 0)
+				local.get $cmd_type_comparison
+				i32.const sleb 0
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 2
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				return
+			end
+
+			; if wordEquals(index, 'ne')
+			local.get $index
+			i32.const ascii n
+			i32.const ascii e
+			call $f_equals2
+			if NO_RETURN
+
+				; writeSectionChar(type_comparison + 1)
+				local.get $cmd_type_comparison
+				i32.const sleb 1
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 2
+				local.get $index
+				i32.const sleb 2
+				i32.add
+				return
+			end
+
+			; if type == 0 or type == 1
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 1
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'lt_s')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 2)
+					local.get $cmd_type_comparison
+					i32.const sleb 2
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'lt_u')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 3)
+					local.get $cmd_type_comparison
+					i32.const sleb 3
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'gt_s')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 4)
+					local.get $cmd_type_comparison
+					i32.const sleb 4
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'gt_u')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 5)
+					local.get $cmd_type_comparison
+					i32.const sleb 5
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'le_s')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 6)
+					local.get $cmd_type_comparison
+					i32.const sleb 6
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'le_u')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 7)
+					local.get $cmd_type_comparison
+					i32.const sleb 7
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'ge_s')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 8)
+					local.get $cmd_type_comparison
+					i32.const sleb 8
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'ge_u')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals4
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 9)
+					local.get $cmd_type_comparison
+					i32.const sleb 9
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 4
+					local.get $index
+					i32.const sleb 4
+					i32.add
+					return
+				end
+			end
+
+			; if type == 2 or type == 3
+			local.get $cmd_type
+			i32.const sleb 2
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 3
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'lt')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii t
+				call $f_equals2
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 2)
+					local.get $cmd_type_comparison
+					i32.const sleb 2
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 2
+					local.get $index
+					i32.const sleb 2
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'gt')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii t
+				call $f_equals2
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 3)
+					local.get $cmd_type_comparison
+					i32.const sleb 3
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 2
+					local.get $index
+					i32.const sleb 2
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'le')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii e
+				call $f_equals2
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 4)
+					local.get $cmd_type_comparison
+					i32.const sleb 4
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 2
+					local.get $index
+					i32.const sleb 2
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'ge')
+				local.get $index
+				i32.const ascii g
+				i32.const ascii e
+				call $f_equals2
+				if NO_RETURN
+
+					; writeSectionChar(type_comparison + 5)
+					local.get $cmd_type_comparison
+					i32.const sleb 5
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 2
+					local.get $index
+					i32.const sleb 2
+					i32.add
+					return
+				end
+			end
+
+			; if wordEquals(index, 'load')
+			local.get $index
+			i32.const ascii l
+			i32.const ascii o
+			i32.const ascii a
+			i32.const ascii d
+			call $f_equals4
+			if NO_RETURN
+
+				; writeSectionChar(40 + type)
+				i32.const sleb 40
+				local.get $cmd_type
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 4
+				local.get $index
+				i32.const sleb 4
+				i32.add
+				return
+			end
+
+			; if type == 0 or type == 1
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 1
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'load8_s')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 8
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals7
+				if NO_RETURN
+
+					; writeSectionChar(44 + type * 4)
+					i32.const sleb 44
+					local.get $cmd_type
+					i32.const sleb 4
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 7
+					local.get $index
+					i32.const sleb 7
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'load8_u')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 8
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals7
+				if NO_RETURN
+
+					; writeSectionChar(45 + type * 4)
+					i32.const sleb 45
+					local.get $cmd_type
+					i32.const sleb 4
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 7
+					local.get $index
+					i32.const sleb 7
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'load16_s')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 1
+				i32.const str 6
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals8
+				if NO_RETURN
+
+					; writeSectionChar(46 + type * 4)
+					i32.const sleb 46
+					local.get $cmd_type
+					i32.const sleb 4
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 8
+					local.get $index
+					i32.const sleb 8
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'load16_u')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 1
+				i32.const str 6
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals8
+				if NO_RETURN
+
+					; writeSectionChar(47 + type * 4)
+					i32.const sleb 47
+					local.get $cmd_type
+					i32.const sleb 4
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 8
+					local.get $index
+					i32.const sleb 8
+					i32.add
+					return
+				end
+			end
+
+			; if type == 1
+			local.get $cmd_type
+			i32.const sleb 1
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'load32_s')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals8
+				if NO_RETURN
+
+					; writeSectionChar(52)
+					i32.const sleb 52
+					call $f_writeSectionChar
+
+					; return index + 8
+					local.get $index
+					i32.const sleb 8
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'load32_u')
+				local.get $index
+				i32.const ascii l
+				i32.const ascii o
+				i32.const ascii a
+				i32.const ascii d
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals8
+				if NO_RETURN
+
+					; writeSectionChar(53)
+					i32.const sleb 53
+					call $f_writeSectionChar
+
+					; return index + 8
+					local.get $index
+					i32.const sleb 8
+					i32.add
+					return
+				end
+			end
+
+			; if wordEquals(index, 'store')
+			local.get $index
+			i32.const ascii s
+			i32.const ascii t
+			i32.const ascii o
+			i32.const ascii r
+			i32.const ascii e
+			call $f_equals5
+			if NO_RETURN
+
+				; writeSectionChar(54 + type)
+				i32.const sleb 54
+				local.get $cmd_type
+				i32.add
+				call $f_writeSectionChar
+
+				; return index + 5
+				local.get $index
+				i32.const sleb 5
+				i32.add
+				return
+			end
+
+			; if type == 0 or type == 1
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 1
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'store8')
+				local.get $index
+				i32.const ascii s
+				i32.const ascii t
+				i32.const ascii o
+				i32.const ascii r
+				i32.const ascii e
+				i32.const str 8
+				call $f_equals6
+				if NO_RETURN
+
+					; writeSectionChar(58 + type * 2)
+					i32.const sleb 58
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 6
+					local.get $index
+					i32.const sleb 6
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'store16')
+				local.get $index
+				i32.const ascii s
+				i32.const ascii t
+				i32.const ascii o
+				i32.const ascii r
+				i32.const ascii e
+				i32.const str 1
+				i32.const str 6
+				call $f_equals7
+				if NO_RETURN
+
+					; writeSectionChar(59 + type * 2)
+					i32.const sleb 59
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 7
+					local.get $index
+					i32.const sleb 7
+					i32.add
+					return
+				end
+			end
+
+			; if type == 1
+			local.get $cmd_type
+			i32.const sleb 1
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'store32')
+				local.get $index
+				i32.const ascii s
+				i32.const ascii t
+				i32.const ascii o
+				i32.const ascii r
+				i32.const ascii e
+				i32.const str 3
+				i32.const str 2
+				call $f_equals7
+				if NO_RETURN
+
+					; writeSectionChar(62)
+					i32.const sleb 62
+					call $f_writeSectionChar
+
+					; return index + 7
+					local.get $index
+					i32.const sleb 7
+					i32.add
+					return
+				end
+			end
+
+			; if type == 0
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'wrap_i64')
+				local.get $index
+				i32.const ascii w
+				i32.const ascii r
+				i32.const ascii a
+				i32.const ascii p
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 6
+				i32.const str 4
+				call $f_equals8
+				if NO_RETURN
+
+					; writeSectionChar(167)
+					i32.const sleb 167
+					call $f_writeSectionChar
+
+					; return index + 8
+					local.get $index
+					i32.const sleb 8
+					i32.add
+					return
+				end
+			end
+
+			; if type == 1
+			local.get $cmd_type
+			i32.const sleb 1
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'extend_i32_s')
+				local.get $index
+				i32.const ascii e
+				i32.const ascii x
+				i32.const ascii t
+				i32.const ascii e
+				i32.const ascii n
+				i32.const ascii d
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals12
+				if NO_RETURN
+
+					; writeSectionChar(172)
+					i32.const sleb 172
+					call $f_writeSectionChar
+
+					; return index + 12
+					local.get $index
+					i32.const sleb 12
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'extend_i32_u')
+				local.get $index
+				i32.const ascii e
+				i32.const ascii x
+				i32.const ascii t
+				i32.const ascii e
+				i32.const ascii n
+				i32.const ascii d
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals12
+				if NO_RETURN
+
+					; writeSectionChar(173)
+					i32.const sleb 173
+					call $f_writeSectionChar
+
+					; return index + 12
+					local.get $index
+					i32.const sleb 12
+					i32.add
+					return
+				end
+			end
+
+			; if type == 2
+			local.get $cmd_type
+			i32.const sleb 2
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'demote_f64')
+				local.get $index
+				i32.const ascii d
+				i32.const ascii e
+				i32.const ascii m
+				i32.const ascii o
+				i32.const ascii t
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 6
+				i32.const str 4
+				call $f_equals10
+				if NO_RETURN
+
+					; writeSectionChar(182)
+					i32.const sleb 182
+					call $f_writeSectionChar
+
+					; return index + 10
+					local.get $index
+					i32.const sleb 10
+					i32.add
+					return
+				end
+			end
+
+			; if type == 3
+			local.get $cmd_type
+			i32.const sleb 3
+			i32.eq
+			if NO_RETURN
+
+				; if wordEquals(index, 'promote_f32')
+				local.get $index
+				i32.const ascii p
+				i32.const ascii r
+				i32.const ascii o
+				i32.const ascii m
+				i32.const ascii o
+				i32.const ascii t
+				i32.const ascii e
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 3
+				i32.const str 2
+				call $f_equals11
+				if NO_RETURN
+
+					; writeSectionChar(187)
+					i32.const sleb 187
+					call $f_writeSectionChar
+
+					; return index + 11
+					local.get $index
+					i32.const sleb 11
+					i32.add
+					return
+				end
+			end
+
+			; if type == 0 or type == 1
+			local.get $cmd_type
+			i32.const sleb 0
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 1
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'trunc_f32_s')
+				local.get $index
+				i32.const ascii t
+				i32.const ascii r
+				i32.const ascii u
+				i32.const ascii n
+				i32.const ascii c
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals11
+				if NO_RETURN
+
+					; writeSectionChar(168 + type * 6)
+					i32.const sleb 168
+					local.get $cmd_type
+					i32.const sleb 6
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 11
+					local.get $index
+					i32.const sleb 11
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'trunc_f32_u')
+				local.get $index
+				i32.const ascii t
+				i32.const ascii r
+				i32.const ascii u
+				i32.const ascii n
+				i32.const ascii c
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals11
+				if NO_RETURN
+
+					; writeSectionChar(169 + type * 6)
+					i32.const sleb 169
+					local.get $cmd_type
+					i32.const sleb 6
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 11
+					local.get $index
+					i32.const sleb 11
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'trunc_f64_s')
+				local.get $index
+				i32.const ascii t
+				i32.const ascii r
+				i32.const ascii u
+				i32.const ascii n
+				i32.const ascii c
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 6
+				i32.const str 4
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals11
+				if NO_RETURN
+
+					; writeSectionChar(170 + type * 6)
+					i32.const sleb 170
+					local.get $cmd_type
+					i32.const sleb 6
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 11
+					local.get $index
+					i32.const sleb 11
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'trunc_f64_u')
+				local.get $index
+				i32.const ascii t
+				i32.const ascii r
+				i32.const ascii u
+				i32.const ascii n
+				i32.const ascii c
+				i32.const ascii _
+				i32.const ascii f
+				i32.const str 6
+				i32.const str 4
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals11
+				if NO_RETURN
+
+					; writeSectionChar(171 + type * 6)
+					i32.const sleb 171
+					local.get $cmd_type
+					i32.const sleb 6
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 11
+					local.get $index
+					i32.const sleb 11
+					i32.add
+					return
+				end
+			end
+
+			; if type == 2 or type == 3
+			local.get $cmd_type
+			i32.const sleb 2
+			i32.eq
+			if i32
+				i32.const sleb 1
+			else
+				local.get $cmd_type
+				i32.const sleb 3
+				i32.eq
+				i32.eqz
+				i32.eqz
+			end
+			if NO_RETURN
+
+				; if wordEquals(index, 'convert_i32_s')
+				local.get $index
+				i32.const ascii c
+				i32.const ascii o
+				i32.const ascii n
+				i32.const ascii v
+				i32.const ascii e
+				i32.const ascii r
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals13
+				if NO_RETURN
+
+					; writeSectionChar(178 + (type - 2) * 5)
+					i32.const sleb 178
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.sub
+					i32.const sleb 5
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 13
+					local.get $index
+					i32.const sleb 13
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'convert_i32_u')
+				local.get $index
+				i32.const ascii c
+				i32.const ascii o
+				i32.const ascii n
+				i32.const ascii v
+				i32.const ascii e
+				i32.const ascii r
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 3
+				i32.const str 2
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals13
+				if NO_RETURN
+
+					; writeSectionChar(179 + (type - 2) * 5)
+					i32.const sleb 179
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.sub
+					i32.const sleb 5
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 13
+					local.get $index
+					i32.const sleb 13
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'convert_i64_s')
+				local.get $index
+				i32.const ascii c
+				i32.const ascii o
+				i32.const ascii n
+				i32.const ascii v
+				i32.const ascii e
+				i32.const ascii r
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 6
+				i32.const str 4
+				i32.const ascii _
+				i32.const ascii s
+				call $f_equals13
+				if NO_RETURN
+
+					; writeSectionChar(180 + (type - 2) * 5)
+					i32.const sleb 180
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.sub
+					i32.const sleb 5
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 13
+					local.get $index
+					i32.const sleb 13
+					i32.add
+					return
+				end
+
+				; if wordEquals(index, 'convert_i64_u')
+				local.get $index
+				i32.const ascii c
+				i32.const ascii o
+				i32.const ascii n
+				i32.const ascii v
+				i32.const ascii e
+				i32.const ascii r
+				i32.const ascii t
+				i32.const ascii _
+				i32.const ascii i
+				i32.const str 6
+				i32.const str 4
+				i32.const ascii _
+				i32.const ascii u
+				call $f_equals13
+				if NO_RETURN
+
+					; writeSectionChar(181 + (type - 2) * 5)
+					i32.const sleb 181
+					local.get $cmd_type
+					i32.const sleb 2
+					i32.sub
+					i32.const sleb 5
+					i32.mul
+					i32.add
+					call $f_writeSectionChar
+
+					; return index + 13
+					local.get $index
+					i32.const sleb 13
+					i32.add
+					return
+				end
+			end
+		end
+
+		; return index
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; parseWord(index)
+
+		; extra locals = 1 (start at 0)
+		uleb 1 uleb 1 i32
+
+		; local names
+		#word_parse_index 1
+
+		; if wordEquals(index, 'i64')
+		local.get $index
+		i32.const ascii i
+		i32.const ascii 6
+		i32.const ascii 4
+		call $f_equals3
+		if NO_RETURN
+			i32.const sleb 126
+			call $f_writeSectionChar
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'f32')
+		local.get $index
+		i32.const ascii f
+		i32.const ascii 3
+		i32.const ascii 2
+		call $f_equals3
+		if NO_RETURN
+			i32.const sleb 125
+			call $f_writeSectionChar
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'f64')
+		local.get $index
+		i32.const ascii f
+		i32.const ascii 6
+		i32.const ascii 4
+		call $f_equals3
+		if NO_RETURN
+			i32.const sleb 124
+			call $f_writeSectionChar
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'hex')
+		local.get $index
+		i32.const ascii h
+		i32.const ascii e
+		i32.const ascii x
+		call $f_equals3
+		if NO_RETURN
+
+			; return writeFromHex(index + 3)
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			call $f_writeFromHex
+			return
+		end
+
+		; if wordEquals(index, 'bin')
+		local.get $index
+		i32.const ascii b
+		i32.const ascii i
+		i32.const ascii n
+		call $f_equals3
+		if NO_RETURN
+
+			; return writeFromBin(index + 3)
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			call $f_writeFromBin
+			return
+		end
+
+		; if wordEquals(index, 'str')
+		local.get $index
+		i32.const ascii s
+		i32.const ascii t
+		i32.const ascii r
+		call $f_equals3
+		if NO_RETURN
+
+			; return writeFromString(index + 3)
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			call $f_writeFromString
+			return
+		end
+
+		; if wordEquals(index, 'i32')
+		local.get $index
+		i32.const ascii i
+		i32.const str 3
+		i32.const str 2
+		call $f_equals3
+		if NO_RETURN
+
+			; writeSectionChar(127)
+			i32.const sleb 127
+			call $f_writeSectionChar
+
+			; return index + 3
+			local.get $index
+			i32.const sleb 3
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'uleb')
+		local.get $index
+		i32.const ascii u
+		i32.const ascii l
+		i32.const ascii e
+		i32.const ascii b
+		call $f_equals4
+		if NO_RETURN
+
+			; return writeFromUleb(index + 4)
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			call $f_writeFromUleb
+			return
+		end
+
+		; if wordEquals(index, 'sleb')
+		local.get $index
+		i32.const ascii s
+		i32.const ascii l
+		i32.const ascii e
+		i32.const ascii b
+		call $f_equals4
+		if NO_RETURN
+			local.get $index
+			i32.const sleb 4
+			i32.add
+			call $f_writeFromSleb
+			return
+		end
+
+		; if wordEquals(index, 'ascii')
+		local.get $index
+		i32.const ascii a
+		i32.const ascii s
+		i32.const ascii c
+		i32.const ascii i
+		i32.const ascii i
+		call $f_equals5
+		if NO_RETURN
+			; return writeFromAscii(index + 5)
+			local.get $index
+			i32.const sleb 5
+			i32.add
+			call $f_writeFromAscii
+			return
+		end
+
+		; if wordEquals(index, 'float32')
+		local.get $index
+		i32.const ascii f
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii a
+		i32.const ascii t
+		i32.const ascii 3
+		i32.const ascii 2
+		call $f_equals7
+		if NO_RETURN
+			local.get $index
+			i32.const sleb 7
+			i32.add
+			call $f_writeFromFloat32
+			return
+		end
+
+		; if wordEquals(index, 'float64')
+		local.get $index
+		i32.const ascii f
+		i32.const ascii l
+		i32.const ascii o
+		i32.const ascii a
+		i32.const ascii t
+		i32.const ascii 6
+		i32.const ascii 4
+		call $f_equals7
+		if NO_RETURN
+			local.get $index
+			i32.const sleb 7
+			i32.add
+			call $f_writeFromFloat64
+			return
+		end
+
+		; if wordEquals(index, 'SECTION')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		call $f_equals7
+		if NO_RETURN
+
+			; SECTION_LAST_BYTES_OUT = SECTION_BYTES_OUT
+			i32.const $SECTION_LAST_BYTES_OUT
+			i32.const $SECTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.store uleb 2 uleb 0
+
+			; COUNT = 0
+			i32.const $COUNT
+			i32.const sleb 0
+			i32.store uleb 2 uleb 0
+
+			; return index + 7
+			local.get $index
+			i32.const sleb 7
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'COUNT')
+		local.get $index
+		i32.const ascii C
+		i32.const ascii O
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii T
+		call $f_equals5
+		if NO_RETURN
+			; COUNT += 1
+			i32.const $COUNT
+			i32.const $COUNT
+			i32.load uleb 2 uleb 0
+			i32.const sleb 1
+			i32.add
+			i32.store uleb 2 uleb 0
+
+			; return index + 5
+			local.get $index
+			i32.const sleb 5
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_END')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii E
+		i32.const ascii N
+		i32.const ascii D
+		call $f_equals11
+		if NO_RETURN
+
+			; writeSection(WRITING_TO_FUNCTION, CURRENT_SECTION, SECTION_BYTES_OUT - SECTION_LAST_BYTES_OUT, SECTION_LAST_BYTES_OUT)
+			i32.const $WRITING_TO_FUNCTION
+			i32.load uleb 2 uleb 0
+			i32.const $CURRENT_SECTION
+			i32.load uleb 2 uleb 0
+			i32.const $SECTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const $SECTION_LAST_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.sub
+			i32.const $SECTION_LAST_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			call $f_writeSection
+
+			; return index + 11
+			local.get $index
+			i32.const sleb 11
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_HEADER')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii H
+		i32.const ascii E
+		i32.const ascii A
+		i32.const ascii D
+		i32.const ascii E
+		i32.const ascii R
+		call $f_equals14
+		if NO_RETURN
+
+			; write_char(0)
+			i32.const sleb 0
+			call $f_write_char
+
+			; write_char(97)
+			i32.const ascii a
+			call $f_write_char
+
+			; write_char(115)
+			i32.const ascii s
+			call $f_write_char
+
+			; write_char(109)
+			i32.const ascii m
+			call $f_write_char
+
+			; write_char(1)
+			i32.const sleb 1
+			call $f_write_char
+
+			; write_char(0)
+			i32.const sleb 0
+			call $f_write_char
+
+			; write_char(0)
+			i32.const sleb 0
+			call $f_write_char
+
+			; write_char(0)
+			i32.const sleb 0
+			call $f_write_char
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_TYPE')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii T
+		i32.const ascii Y
+		i32.const ascii P
+		i32.const ascii E
+		call $f_equals12
+		if NO_RETURN
+
+			; CURRENT_SECTION = 1
+			i32.const $CURRENT_SECTION
+			i32.const sleb 1
+			i32.store uleb 2 uleb 0
+
+			; return index + 12
+			local.get $index
+			i32.const sleb 12
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_IMPORT')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii I
+		i32.const ascii M
+		i32.const ascii P
+		i32.const ascii O
+		i32.const ascii R
+		i32.const ascii T
+		call $f_equals14
+		if NO_RETURN
+
+			; CURRENT_SECTION = 2
+			i32.const $CURRENT_SECTION
+			i32.const sleb 2
+			i32.store uleb 2 uleb 0
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_FUNCTION')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii F
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		call $f_equals16
+		if NO_RETURN
+
+			; CURRENT_SECTION = 3
+			i32.const $CURRENT_SECTION
+			i32.const sleb 3
+			i32.store uleb 2 uleb 0
+
+			; return index + 16
+			local.get $index
+			i32.const sleb 16
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_MEMORY')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii M
+		i32.const ascii E
+		i32.const ascii M
+		i32.const ascii O
+		i32.const ascii R
+		i32.const ascii Y
+		call $f_equals14
+		if NO_RETURN
+
+			; CURRENT_SECTION = 5
+			i32.const $CURRENT_SECTION
+			i32.const sleb 5
+			i32.store uleb 2 uleb 0
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_GLOBAL')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii G
+		i32.const ascii L
+		i32.const ascii O
+		i32.const ascii B
+		i32.const ascii A
+		i32.const ascii L
+		call $f_equals14
+		if NO_RETURN
+
+			; CURRENT_SECTION = 6
+			i32.const $CURRENT_SECTION
+			i32.const sleb 6
+			i32.store uleb 2 uleb 0
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_EXPORT')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii E
+		i32.const ascii X
+		i32.const ascii P
+		i32.const ascii O
+		i32.const ascii R
+		i32.const ascii T
+		call $f_equals14
+		if NO_RETURN
+
+			; CURRENT_SECTION = 7
+			i32.const $CURRENT_SECTION
+			i32.const sleb 7
+			i32.store uleb 2 uleb 0
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_CODE')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii C
+		i32.const ascii O
+		i32.const ascii D
+		i32.const ascii E
+		call $f_equals12
+		if NO_RETURN
+
+			; CURRENT_SECTION = 10
+			i32.const $CURRENT_SECTION
+			i32.const sleb 10
+			i32.store uleb 2 uleb 0
+
+			; return index + 12
+			local.get $index
+			i32.const sleb 12
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'SECTION_DATA')
+		local.get $index
+		i32.const ascii S
+		i32.const ascii E
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii D
+		i32.const ascii A
+		i32.const ascii T
+		i32.const ascii A
+		call $f_equals12
+		if NO_RETURN
+			i32.const $CURRENT_SECTION
+			i32.const sleb 11
+			i32.store uleb 2 uleb 0
+			local.get $index
+			i32.const sleb 12
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'FUNCTION')
+		local.get $index
+		i32.const ascii F
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		call $f_equals8
+		if NO_RETURN
+
+			; writeSectionChar(96)
+			i32.const ascii `
+			call $f_writeSectionChar
+
+			; return index + 8
+			local.get $index
+			i32.const sleb 8
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'FUNCTION_KIND')
+		local.get $index
+		i32.const ascii F
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii K
+		i32.const ascii I
+		i32.const ascii N
+		i32.const ascii D
+		call $f_equals13
+		if NO_RETURN
+
+			; writeSectionChar(0)
+			i32.const sleb 0
+			call $f_writeSectionChar
+
+			; return index + 13
+			local.get $index
+			i32.const sleb 13
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'MEMORY_KIND')
+		local.get $index
+		i32.const ascii M
+		i32.const ascii E
+		i32.const ascii M
+		i32.const ascii O
+		i32.const ascii R
+		i32.const ascii Y
+		i32.const ascii _
+		i32.const ascii K
+		i32.const ascii I
+		i32.const ascii N
+		i32.const ascii D
+		call $f_equals11
+		if NO_RETURN
+
+			; writeSectionChar(0)
+			i32.const sleb 2
+			call $f_writeSectionChar
+
+			; return index + 11
+			local.get $index
+			i32.const sleb 11
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'FUNCTION_START')
+		local.get $index
+		i32.const ascii F
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii S
+		i32.const ascii T
+		i32.const ascii A
+		i32.const ascii R
+		i32.const ascii T
+		call $f_equals14
+		if NO_RETURN
+
+			; FUNCTION_LAST_BYTES_OUT = FUNCTION_BYTES_OUT
+			i32.const $FUNCTION_LAST_BYTES_OUT
+			i32.const $FUNCTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.store uleb 2 uleb 0
+
+			; WRITING_TO_FUNCTION = 1
+			i32.const $WRITING_TO_FUNCTION
+			i32.const sleb 1
+			i32.store uleb 2 uleb 0
+
+			; LABEL_SCOPE = 0
+			i32.const $LABEL_SCOPE
+			i32.const sleb 0
+			i32.store uleb 2 uleb 0
+
+			; LABEL_FIRST_SYMBOL_ID = LAST_SYMBOL_ID
+			i32.const $LABEL_FIRST_SYMBOL_ID
+			i32.const $LAST_SYMBOL_ID
+			i32.load uleb 2 uleb 0
+			i32.store uleb 2 uleb 0
+
+			; return index + 14
+			local.get $index
+			i32.const sleb 14
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'FUNCTION_END')
+		local.get $index
+		i32.const ascii F
+		i32.const ascii U
+		i32.const ascii N
+		i32.const ascii C
+		i32.const ascii T
+		i32.const ascii I
+		i32.const ascii O
+		i32.const ascii N
+		i32.const ascii _
+		i32.const ascii E
+		i32.const ascii N
+		i32.const ascii D
+		call $f_equals12
+		if NO_RETURN
+
+			; WRITING_TO_FUNCTION = 0
+			i32.const $WRITING_TO_FUNCTION
+			i32.const sleb 0
+			i32.store uleb 2 uleb 0
+
+			; writeSection(1, 0, FUNCTION_BYTES_OUT - FUNCTION_LAST_BYTES_OUT, FUNCTION_LAST_BYTES_OUT)
+			i32.const sleb 1
+			i32.const sleb 0
+			i32.const $FUNCTION_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.const $FUNCTION_LAST_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			i32.sub
+			i32.const $FUNCTION_LAST_BYTES_OUT
+			i32.load uleb 2 uleb 0
+			call $f_writeSection
+
+			; LABEL_SCOPE = 0
+			i32.const $LABEL_SCOPE
+			i32.const sleb 0
+			i32.store uleb 2 uleb 0
+
+			; return index + 12
+			local.get $index
+			i32.const sleb 12
+			i32.add
+			return
+		end
+
+		; if wordEquals(index, 'NO_RETURN')
+		local.get $index
+		i32.const ascii N
+		i32.const ascii O
+		i32.const ascii _
+		i32.const ascii R
+		i32.const ascii E
+		i32.const ascii T
+		i32.const ascii U
+		i32.const ascii R
+		i32.const ascii N
+		call $f_equals9
+		if NO_RETURN
+
+			; writeSectionChar(64)
+			i32.const ascii @
+			call $f_writeSectionChar
+
+			; return index + 9
+			local.get $index
+			i32.const sleb 9
+			i32.add
+			return
+		end
+
+		; if isComment(index)
+		local.get $index
+		call $f_isComment
+		if NO_RETURN
+
+			; return skipComment(index)
+			local.get $index
+			call $f_skipComment
+			return
+		end
+
+		; if memory[index] == '#'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const str #
+		i32.eq
+		if NO_RETURN
+
+			; return setVariable(index + 1)
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			call $f_setVariable
+			return
+		end
+
+		; if memory[index] == '$'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const str $
+		i32.eq
+		if NO_RETURN
+
+			; return getVariable(index + 1)
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			call $f_getVariable
+			return
+		end
+
+		; if memory[index] == '@'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii @
+		i32.eq
+		if NO_RETURN
+
+			; return setLabel(index + 1)
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			call $f_setLabel
+			return
+		end
+
+		; if memory[index] == '^'
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii ^
+		i32.eq
+		if NO_RETURN
+
+			; return getLabel(index + 1)
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			call $f_getLabel
+			return
+		end
+
+		; if memory[index] == 0
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const sleb 0
+		i32.eq
+		if NO_RETURN
+
+			; return -67
+			i32.const sleb 0
+			i32.const ascii C
+			i32.sub
+			return
+		end
+
+		; parse_index = parseCmd(index)
+		local.get $index
+		call $f_parseCmd
+		local.set $word_parse_index
+
+		; if parse_index != index
+		local.get $word_parse_index
+		local.get $index
+		i32.ne
+		if NO_RETURN
+
+			; return parse_index
+			local.get $word_parse_index
+			return
+		end
+
+		; error(index, 4)
+		local.get $index
+		i32.const sleb 4
+		call $f_error
+
+		; return 0
+		i32.const sleb 0
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; main()
+
+		; extra locals = 1 (start at 0)
+		uleb 1 uleb 1 i32
+
+		; local names
+
+		; Diagnostic strings are already initialized by the DATA section.
+
+		; Line numbers start at 1 on every call to main.
+		i32.const $CURRENT_LINE
+		i32.const sleb 1
+		i32.store uleb 2 uleb 0
+
+		; reset assembler state
+		i32.const $SECTION_BYTES_OUT
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $SECTION_LAST_BYTES_OUT
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $FUNCTION_BYTES_OUT
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $FUNCTION_LAST_BYTES_OUT
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $WRITING_TO_FUNCTION
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $LAST_SYMBOL_ID
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $CURRENT_SECTION
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $symbol_names_stack_index
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $symbol_values_stack_index
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $LABEL_SCOPE
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+		i32.const $LABEL_FIRST_SYMBOL_ID
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+
+		; COUNT = 0
+		i32.const $COUNT
+		i32.const sleb 0
+		i32.store uleb 2 uleb 0
+
+		; index = 0
+		i32.const sleb 0
+		local.set $index
+
+		; while true
+		block NO_RETURN @input_done
+			loop NO_RETURN @input_loop
+				i32.const sleb 1
+				i32.eqz
+				br_if ^input_done
+
+				; index = skipWhiteSpace(index)
+				local.get $index
+				call $f_skipWhiteSpace
+				local.set $index
+
+				; index = parseWord(index)
+				local.get $index
+				call $f_parseWord
+				local.set $index
+
+				; if index >= inputLimit or index == -67
+				local.get $index
+				i32.const $inputLimit
+				i32.ge_s
+				if i32
+					i32.const sleb 1
+				else
+					local.get $index
+					i32.const sleb 0
+					i32.const ascii C
+					i32.sub
+					i32.eq
+					i32.eqz
+					i32.eqz
+				end
+				if NO_RETURN
+
+					; break
+					br ^input_done
+				end
+
+				; repeat
+				br ^input_loop
+			end
+		end
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromAscii(index)
+		; One parameter and one extra local.
+		uleb 1 uleb 1 i32
+
+		#ascii_char 1
+
+		; index = skipWhiteSpace(index)
+		local.get $index
+		call $f_skipWhiteSpace
+		local.set $index
+
+		; Read one character; reject missing input and bytes outside ASCII 1-127.
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.set $ascii_char
+		local.get $ascii_char
+		i32.eqz
+		local.get $ascii_char
+		i32.const sleb 128
+		i32.ge_u
+		i32.or
+		if NO_RETURN
+			local.get $index
+			i32.const sleb 7
+			call $f_error
+		end
+
+		; Require the next byte to be whitespace or the end of input.
+		local.get $index
+		i32.const sleb 1
+		i32.add
+		i32.load8_u uleb 0 uleb 0
+		i32.const sleb 0
+		i32.ne
+		local.get $index
+		i32.const sleb 1
+		i32.add
+		call $f_isWhiteSpace
+		i32.eqz
+		i32.and
+		if NO_RETURN
+			local.get $index
+			i32.const sleb 7
+			call $f_error
+		end
+
+		; char >= 64; construct positive 64 as 128 >> 1.
+		local.get $ascii_char
+		i32.const sleb 64
+		i32.ge_u
+		if NO_RETURN
+			; Two bytes preserve the positive sign in signed LEB128.
+			local.get $ascii_char
+			i32.const hex 80
+			i32.or
+			call $f_writeSectionChar
+			i32.const sleb 0
+			call $f_writeSectionChar
+		else
+			local.get $ascii_char
+			call $f_writeSectionChar
+		end
+
+		; return index + 1
+		local.get $index
+		i32.const sleb 1
+		i32.add
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeSignedByte(number)
+		; Signed i32 LEB128; arithmetic shifts preserve negative values.
+		uleb 1 uleb 2 i32
+		#signed_n 0
+		#signed_b 1
+		#signed_done 2
+		loop NO_RETURN @signed_loop
+			local.get $signed_n
+			i32.const sleb 127
+			i32.and
+			local.set $signed_b
+			local.get $signed_n
+			i32.const sleb 7
+			i32.shr_s
+			local.set $signed_n
+
+			; Finish when the remaining bits agree with bit 6 of this byte.
+			local.get $signed_n
+			i32.eqz
+			local.get $signed_b
+			i32.const sleb 64
+			i32.and
+			i32.eqz
+			i32.and
+			local.get $signed_n
+			i32.const sleb -1
+			i32.eq
+			local.get $signed_b
+			i32.const sleb 64
+			i32.and
+			i32.const sleb 0
+			i32.ne
+			i32.and
+			i32.or
+			local.set $signed_done
+
+			local.get $signed_done
+			i32.eqz
+			if NO_RETURN
+				local.get $signed_b
+				i32.const sleb 128
+				i32.or
+				local.set $signed_b
+			end
+			local.get $signed_b
+			call $f_writeSectionChar
+			local.get $signed_done
+			if NO_RETURN
+				return
+			end
+			br ^signed_loop
+		end
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromSleb(index)
+		; Parse an optional minus sign and a decimal signed i32.
+		uleb 1 uleb 5 i32
+		#sleb_start 1
+		#sleb_neg 2
+		#sleb_n 3
+		#sleb_c 4
+		#sleb_digit 5
+		local.get $index
+		call $f_skipWhiteSpace
+		local.tee $index
+		local.set $sleb_start
+		i32.const sleb 0
+		local.set $sleb_neg
+		i32.const sleb 0
+		local.set $sleb_n
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii -
+		i32.eq
+		if NO_RETURN
+			i32.const sleb 1
+			local.set $sleb_neg
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			local.set $index
+		end
+
+		; Even a signed token must contain at least one digit.
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		local.tee $sleb_c
+		i32.const ascii 0
+		i32.lt_u
+		local.get $sleb_c
+		i32.const ascii 9
+		i32.gt_u
+		i32.or
+		if NO_RETURN
+			local.get $sleb_start
+			i32.const sleb 8
+			call $f_error
+		end
+		block NO_RETURN @sleb_done
+			loop NO_RETURN @sleb_loop
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				local.tee $sleb_c
+				i32.eqz
+				br_if ^sleb_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^sleb_done
+				local.get $sleb_c
+				i32.const ascii 0
+				i32.lt_u
+				local.get $sleb_c
+				i32.const ascii 9
+				i32.gt_u
+				i32.or
+				if NO_RETURN
+					local.get $index
+					i32.const sleb 8
+					call $f_error
+				end
+				local.get $sleb_c
+				i32.const ascii 0
+				i32.sub
+				local.set $sleb_digit
+
+				; Check the next digit BEFORE multiplication can overflow i32.
+				; Maximum magnitude is 2147483647, or 2147483648 when negative.
+				local.get $sleb_n
+				i32.const sleb 214748364
+				i32.gt_u
+				local.get $sleb_n
+				i32.const sleb 214748364
+				i32.eq
+				local.get $sleb_digit
+				i32.const sleb 7
+				local.get $sleb_neg
+				i32.add
+				i32.gt_u
+				i32.and
+				i32.or
+				if NO_RETURN
+					; Match Python's error code for an out-of-range signed i32.
+					local.get $sleb_start
+					i32.const sleb 4
+					call $f_error
+				end
+				local.get $sleb_n
+				i32.const sleb 10
+				i32.mul
+				local.get $sleb_digit
+				i32.add
+				local.set $sleb_n
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^sleb_loop
+			end
+		end
+		local.get $sleb_neg
+		if NO_RETURN
+			; Two's-complement subtraction also handles -2147483648.
+			i32.const sleb 0
+			local.get $sleb_n
+			i32.sub
+			local.set $sleb_n
+		end
+		local.get $sleb_n
+		call $f_writeSignedByte
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+
+	FUNCTION_START ; writeFromFloat32(index)
+
+		uleb 0
+		; writeFromFloat(index, 23, 8, 127)
+		local.get uleb 0
+		i32.const sleb 23
+		i32.const sleb 8
+		i32.const sleb 127
+		call $f_writeFromFloat
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromFloat64(index)
+
+		uleb 0
+		; writeFromFloat(index, 52, 11, 1023)
+		local.get uleb 0
+		i32.const sleb 52
+		i32.const sleb 11
+		i32.const sleb 1023
+		call $f_writeFromFloat
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFromFloat(index, fraction_bits, exponent_bits, bias)
+
+		; Four i32 parameters, five i32 locals and two f64 locals.
+		; Wasm initializes the sign, decimal flag, and digit count to zero.
+		uleb 2 uleb 5 i32 uleb 2 hex 7C
+		#fp_fbits 1
+		#fp_ebits 2
+		#fp_bias 3
+		#fp_start 4
+		#fp_neg 5
+		#fp_dot 6
+		#fp_digits 7
+		#fp_char 8
+		#fp_number 9
+		#fp_scale 10
+
+		local.get $index
+		call $f_skipWhiteSpace
+		local.tee $index
+		local.set $fp_start
+		i32.const sleb 0
+		f64.convert_i32_s
+		local.set $fp_number
+		i32.const sleb 1
+		f64.convert_i32_s
+		local.set $fp_scale
+
+		; Optional minus sign, including for negative zero.
+		local.get $index
+		i32.load8_u uleb 0 uleb 0
+		i32.const ascii -
+		i32.eq
+		if NO_RETURN
+			i32.const sleb 1
+			local.set $fp_neg
+			local.get $index
+			i32.const sleb 1
+			i32.add
+			local.set $index
+		end
+
+		block NO_RETURN @fp_done
+			loop NO_RETURN @fp_loop
+				local.get $index
+				i32.load8_u uleb 0 uleb 0
+				local.tee $fp_char
+				i32.eqz
+				br_if ^fp_done
+				local.get $index
+				call $f_isWhiteSpace
+				br_if ^fp_done
+
+				; At most one decimal point is permitted.
+				local.get $fp_char
+				i32.const ascii .
+				i32.eq
+				if NO_RETURN
+					local.get $fp_dot
+					if NO_RETURN
+						local.get $index
+						i32.const sleb 10
+						call $f_error
+					end
+					i32.const sleb 1
+					local.set $fp_dot
+				else
+					local.get $fp_char
+					i32.const ascii 0
+					i32.lt_u
+					local.get $fp_char
+					i32.const ascii 9
+					i32.gt_u
+					i32.or
+					if NO_RETURN
+						local.get $index
+						i32.const sleb 10
+						call $f_error
+					end
+
+					; number = number * 10.0 + (char - 48)
+					local.get $fp_number
+					i32.const sleb 10
+					f64.convert_i32_s
+					f64.mul
+					local.get $fp_char
+					i32.const ascii 0
+					i32.sub
+					f64.convert_i32_s
+					f64.add
+					local.set $fp_number
+					local.get $fp_digits
+					i32.const sleb 1
+					i32.add
+					local.set $fp_digits
+					local.get $fp_dot
+					if NO_RETURN
+						local.get $fp_scale
+						i32.const sleb 10
+						f64.convert_i32_s
+						f64.mul
+						local.set $fp_scale
+					end
+
+					; Finite x satisfies x-x == 0. Overflow to infinity produces NaN.
+					; This matches Python's checks against the maximum finite f64.
+					local.get $fp_number
+					local.get $fp_number
+					f64.sub
+					i32.const sleb 0
+					f64.convert_i32_s
+					f64.ne
+					local.get $fp_scale
+					local.get $fp_scale
+					f64.sub
+					i32.const sleb 0
+					f64.convert_i32_s
+					f64.ne
+					i32.or
+					if NO_RETURN
+						local.get $fp_start
+						i32.const sleb 10
+						call $f_error
+					end
+				end
+				local.get $index
+				i32.const sleb 1
+				i32.add
+				local.set $index
+				br ^fp_loop
+			end
+		end
+
+		local.get $fp_digits
+		i32.eqz
+		if NO_RETURN
+			local.get $fp_start
+			i32.const sleb 10
+			call $f_error
+		end
+		local.get $fp_number
+		local.get $fp_scale
+		f64.div_s
+		local.get $fp_neg
+		local.get $fp_fbits
+		local.get $fp_ebits
+		local.get $fp_bias
+		local.get $fp_start
+		call $f_writeFloatBits
+		local.get $index
+		return
+	end
+	FUNCTION_END
+
+	FUNCTION_START ; writeFloatBits(number, negative, fraction_bits, exponent_bits, bias, number_start)
+
+		; Parameters: one f64 followed by five i32 values.
+		; Locals: six i32 values and two i64 bit fields.
+		; Exponents, counters, and bit fields start at zero on every call.
+		uleb 2 uleb 6 i32 uleb 2 hex 7E
+		#fb_number 0
+		#fb_neg 1
+		#fb_fbits 2
+		#fb_ebits 3
+		#fb_bias 4
+		#fb_start 5
+		#fb_exp 6
+		#fb_encoded 7
+		#fb_limit 8
+		#fb_bit 9
+		#fb_count 10
+		#fb_index 11
+		#fb_fraction 12
+		#fb_bits 13
+
+		; exponent_limit = (1 << exponent_bits) - 1
+		i32.const sleb 1
+		local.get $fb_ebits
+		i32.shl
+		i32.const sleb 1
+		i32.sub
+		local.set $fb_limit
+		local.get $fb_number
+		i32.const sleb 0
+		f64.convert_i32_s
+		f64.ne
+		if NO_RETURN
+
+			; Normalize towards 1 <= number < 2.
+			block NO_RETURN @norm_hi_done
+				loop NO_RETURN @norm_hi
+					local.get $fb_number
+					i32.const sleb 2
+					f64.convert_i32_s
+					f64.ge
+					i32.eqz
+					br_if ^norm_hi_done
+					local.get $fb_number
+					i32.const sleb 2
+					f64.convert_i32_s
+					f64.div_s
+					local.set $fb_number
+					local.get $fb_exp
+					i32.const sleb 1
+					i32.add
+					local.set $fb_exp
+					br ^norm_hi
+				end
+			end
+
+			; Stop at the minimum normal exponent so subnormals keep no leading 1.
+			block NO_RETURN @norm_lo_done
+				loop NO_RETURN @norm_lo
+					local.get $fb_number
+					i32.const sleb 1
+					f64.convert_i32_s
+					f64.lt
+					local.get $fb_exp
+					i32.const sleb 1
+					local.get $fb_bias
+					i32.sub
+					i32.gt_s
+					i32.and
+					i32.eqz
+					br_if ^norm_lo_done
+					local.get $fb_number
+					i32.const sleb 2
+					f64.convert_i32_s
+					f64.mul
+					local.set $fb_number
+					local.get $fb_exp
+					i32.const sleb 1
+					i32.sub
+					local.set $fb_exp
+					br ^norm_lo
+				end
+			end
+			local.get $fb_number
+			i32.const sleb 1
+			f64.convert_i32_s
+			f64.lt
+			if NO_RETURN
+				i32.const sleb 0
+				local.set $fb_encoded
+			else
+				local.get $fb_exp
+				local.get $fb_bias
+				i32.add
+				local.set $fb_encoded
+				local.get $fb_number
+				i32.const sleb 1
+				f64.convert_i32_s
+				f64.sub
+				local.set $fb_number
+			end
+			local.get $fb_encoded
+			local.get $fb_limit
+			i32.ge_u
+			if NO_RETURN
+				local.get $fb_start
+				i32.const sleb 10
+				call $f_error
+			end
+
+			; Extract 23 or 52 fraction bits without truncating to i32.
+			block NO_RETURN @fraction_done
+				loop NO_RETURN @fraction_loop
+					local.get $fb_bit
+					local.get $fb_fbits
+					i32.ge_u
+					br_if ^fraction_done
+					local.get $fb_number
+					i32.const sleb 2
+					f64.convert_i32_s
+					f64.mul
+					local.set $fb_number
+					local.get $fb_fraction
+					i64.const sleb 1
+					i64.shl
+					local.set $fb_fraction
+					local.get $fb_number
+					i32.const sleb 1
+					f64.convert_i32_s
+					f64.ge
+					if NO_RETURN
+						local.get $fb_fraction
+						i64.const sleb 1
+						i64.or
+						local.set $fb_fraction
+						local.get $fb_number
+						i32.const sleb 1
+						f64.convert_i32_s
+						f64.sub
+						local.set $fb_number
+					end
+					local.get $fb_bit
+					i32.const sleb 1
+					i32.add
+					local.set $fb_bit
+					br ^fraction_loop
+				end
+			end
+
+			; Round to nearest; an exact half rounds to an even fraction.
+			local.get $fb_number
+			i32.const sleb 1
+			f64.convert_i32_s
+			i32.const sleb 2
+			f64.convert_i32_s
+			f64.div_s
+			f64.gt
+			local.get $fb_number
+			i32.const sleb 1
+			f64.convert_i32_s
+			i32.const sleb 2
+			f64.convert_i32_s
+			f64.div_s
+			f64.eq
+			local.get $fb_fraction
+			i64.const sleb 1
+			i64.and
+			i64.eqz
+			i32.eqz
+			i32.and
+			i32.or
+			if NO_RETURN
+				local.get $fb_fraction
+				i64.const sleb 1
+				i64.add
+				local.set $fb_fraction
+			end
+
+			; Rounding can carry from the fraction into the exponent.
+			local.get $fb_fraction
+			i64.const sleb 1
+			local.get $fb_fbits
+			i64.extend_i32_u
+			i64.shl
+			i64.eq
+			if NO_RETURN
+				i64.const sleb 0
+				local.set $fb_fraction
+				local.get $fb_encoded
+				i32.const sleb 1
+				i32.add
+				local.set $fb_encoded
+			end
+			local.get $fb_encoded
+			local.get $fb_limit
+			i32.ge_u
+			if NO_RETURN
+				local.get $fb_start
+				i32.const sleb 10
+				call $f_error
+			end
+		end
+
+		; Assemble sign | exponent | fraction as an i64, even for f32 output.
+		local.get $fb_neg
+		i64.extend_i32_u
+		local.get $fb_fbits
+		local.get $fb_ebits
+		i32.add
+		i64.extend_i32_u
+		i64.shl
+		local.get $fb_encoded
+		i64.extend_i32_u
+		local.get $fb_fbits
+		i64.extend_i32_u
+		i64.shl
+		i64.or
+		local.get $fb_fraction
+		i64.or
+		local.set $fb_bits
+		i32.const sleb 1
+		local.get $fb_ebits
+		i32.add
+		local.get $fb_fbits
+		i32.add
+		i32.const sleb 8
+		i32.div_u
+		local.set $fb_count
+
+		; Emit raw bytes in little-endian order, without LEB128 encoding.
+		block NO_RETURN @float_bytes_done
+			loop NO_RETURN @float_bytes
+				local.get $fb_index
+				local.get $fb_count
+				i32.ge_u
+				br_if ^float_bytes_done
+				local.get $fb_bits
+				i64.const sleb 255
+				i64.and
+				i32.wrap_i64
+				call $f_writeSectionChar
+				local.get $fb_bits
+				i64.const sleb 8
+				i64.shr_u
+				local.set $fb_bits
+				local.get $fb_index
+				i32.const sleb 1
+				i32.add
+				local.set $fb_index
+				br ^float_bytes
+			end
+		end
+	end
+	FUNCTION_END
+
+SECTION_END
+
+; Constant strings are copied into memory when the module is instantiated.
+; Identical strings share a segment and include their terminating zero byte.
+SECTION SECTION_DATA
+
+	; s_ei_start = "Error `\0"
+	COUNT uleb 0
+	i32.const $s_ei_start end
+	uleb 8
+	str Error hex 20 str ` hex 00
+
+	; s_ei_end = "`: \0"
+	COUNT uleb 0
+	i32.const $s_ei_end end
+	uleb 4
+	str `: hex 20 hex 00
+
+	; s_vdne_start = "Variable `\0"
+	COUNT uleb 0
+	i32.const $s_vdne_start end
+	uleb 11
+	str Variable hex 20 str ` hex 00
+
+	; s_vdne_end = "` does not exist.\n\0"
+	COUNT uleb 0
+	i32.const $s_vdne_end end
+	uleb 19
+	str ` hex 20 str does hex 20 str not hex 20 str exist. hex 0A hex 00
+
+	; s_ihc_start = "Invalid hex character `\0"
+	COUNT uleb 0
+	i32.const $s_ihc_start end
+	uleb 24
+	str Invalid hex 20 str hex hex 20 str character hex 20 str ` hex 00
+
+	; s_ihc_end = "`, valid characters (0-9 and A-F).\n\0"
+	COUNT uleb 0
+	i32.const $s_ihc_end end
+	uleb 36
+	str `, hex 20 str valid hex 20 str characters hex 20 str (0-9 hex 20 str and hex 20 str A-F).
+	hex 0A hex 00
+
+	; s_ibc_start = "Invalid binary character `\0"
+	COUNT uleb 0
+	i32.const $s_ibc_start end
+	uleb 27
+	str Invalid hex 20 str binary hex 20 str character hex 20 str ` hex 00
+
+	; s_ibc_end = "`, valid characters (0 and 1).\n\0"
+	COUNT uleb 0
+	i32.const $s_ibc_end end
+	uleb 32
+	str `, hex 20 str valid hex 20 str characters hex 20 str (0 hex 20 str and hex 20 str 1). hex 0A
+	hex 00
+
+	; s_iuc_start = "Invalid uleb character `\0"
+	COUNT uleb 0
+	i32.const $s_iuc_start end
+	uleb 25
+	str Invalid hex 20 str uleb hex 20 str character hex 20 str ` hex 00
+
+	; s_iuc_end = "`, valid characters (0-9).\n\0"
+	COUNT uleb 0
+	i32.const $s_iuc_end end
+	uleb 28
+	str `, hex 20 str valid hex 20 str characters hex 20 str (0-9). hex 0A hex 00
+
+	; s_iac_start = "Invalid ascii character `\0"
+	COUNT uleb 0
+	i32.const $s_iac_start end
+	uleb 26
+	str Invalid hex 20 str ascii hex 20 str character hex 20 str ` hex 00
+
+	; s_iac_end = "`, Expected a single character with ascii value within 1-127.\n\0"
+	COUNT uleb 0
+	i32.const $s_iac_end end
+	uleb 63
+	str `, hex 20 str Expected hex 20 str a hex 20 str single hex 20 str character hex 20 str with
+	hex 20 str ascii hex 20 str value hex 20 str within hex 20 str 1-127. hex 0A hex 00
+
+	; s_ise_start = "Invalid SLEB 128 encoding `\0"
+	COUNT uleb 0
+	i32.const $s_ise_start end
+	uleb 28
+	str Invalid hex 20 str SLEB hex 20 str 128 hex 20 str encoding hex 20 str ` hex 00
+
+	; s_ise_end = "`, valid characters are (0-9 and '-') and expected atleast 1 digit after '-'.\n\0"
+	COUNT uleb 0
+	i32.const $s_ise_end end
+	uleb 79
+	str `, hex 20 str valid hex 20 str characters hex 20 str are hex 20 str (0-9 hex 20 str and hex 20
+	str '-') hex 20 str and hex 20 str expected hex 20 str atleast hex 20 str 1 hex 20 str digit hex 20
+	str after hex 20 str '-'. hex 0A hex 00
+
+	; s_sizilc_start = "Scope is zero invalid label call `\0"
+	COUNT uleb 0
+	i32.const $s_sizilc_start end
+	uleb 35
+	str Scope hex 20 str is hex 20 str zero hex 20 str invalid hex 20 str label hex 20 str call hex 20
+	str ` hex 00
+
+	; s_sizilc_end = "`.\n\0"
+	COUNT uleb 0
+	i32.const $s_sizilc_end end
+	uleb 4
+	str `. hex 0A hex 00
+
+	; s_ik_start = "Invalid keyword `\0"
+	COUNT uleb 0
+	i32.const $s_ik_start end
+	uleb 18
+	str Invalid hex 20 str keyword hex 20 str ` hex 00
+
+	; s_ldne_start = "Label `\0"
+	COUNT uleb 0
+	i32.const $s_ldne_start end
+	uleb 8
+	str Label hex 20 str ` hex 00
+
+	; s_ecind_start = "Error Code `\0"
+	COUNT uleb 0
+	i32.const $s_ecind_start end
+	uleb 13
+	str Error hex 20 str Code hex 20 str ` hex 00
+
+	; s_ecind_end = "` is not defined.\n\0"
+	COUNT uleb 0
+	i32.const $s_ecind_end end
+	uleb 19
+	str ` hex 20 str is hex 20 str not hex 20 str defined. hex 0A hex 00
+
+	; s_eool_start = "Error occured on line `\0"
+	COUNT uleb 0
+	i32.const $s_eool_start end
+	uleb 24
+	str Error hex 20 str occured hex 20 str on hex 20 str line hex 20 str ` hex 00
+
+	; s_ois_start = "Occured in Section `\0"
+	COUNT uleb 0
+	i32.const $s_ois_start end
+	uleb 21
+	str Occured hex 20 str in hex 20 str Section hex 20 str ` hex 00
+
+	; s_ois_TYPE = "TYPE\0"
+	COUNT uleb 0
+	i32.const $s_ois_TYPE end
+	uleb 5
+	str TYPE hex 00
+
+	; s_ois_IMPORT = "IMPORT\0"
+	COUNT uleb 0
+	i32.const $s_ois_IMPORT end
+	uleb 7
+	str IMPORT hex 00
+
+	; s_ois_FUNCTION = "FUNCTION\0"
+	COUNT uleb 0
+	i32.const $s_ois_FUNCTION end
+	uleb 9
+	str FUNCTION hex 00
+
+	; s_ois_MEMORY = "MEMORY\0"
+	COUNT uleb 0
+	i32.const $s_ois_MEMORY end
+	uleb 7
+	str MEMORY hex 00
+
+	; s_ois_GLOBAL = "GLOBAL\0"
+	COUNT uleb 0
+	i32.const $s_ois_GLOBAL end
+	uleb 7
+	str GLOBAL hex 00
+
+	; s_ois_EXPORT = "EXPORT\0"
+	COUNT uleb 0
+	i32.const $s_ois_EXPORT end
+	uleb 7
+	str EXPORT hex 00
+
+	; s_ois_CODE = "CODE\0"
+	COUNT uleb 0
+	i32.const $s_ois_CODE end
+	uleb 5
+	str CODE hex 00
+
+	; s_ois_DATA = "DATA\0"
+	COUNT uleb 0
+	i32.const $s_ois_DATA end
+	uleb 5
+	str DATA hex 00
+
+	; s_pf = "Program Fault.\0"
+	COUNT uleb 0
+	i32.const $s_pf end
+	uleb 15
+	str Program hex 20 str Fault. hex 00
+
+	; s_ifpn_start = "Invalid Floating-Point number `\0"
+	COUNT uleb 0
+	i32.const $s_ifpn_start end
+	uleb 32
+	str Invalid hex 20 str Floating-Point hex 20 str number hex 20 str ` hex 00
+
+	; s_ifpn_end = "`, valid characters are (0-9, '-', and '.'), expects atleast 1 digit after sign if present, and number must not exceed exponent limit (i.e. 1.7976931348623157e+308).\n\0"
+	COUNT uleb 0
+	i32.const $s_ifpn_end end
+	uleb 167
+	str `, hex 20 str valid hex 20 str characters hex 20 str are hex 20 str (0-9, hex 20 str '-',
+	hex 20 str and hex 20 str '.'), hex 20 str expects hex 20 str atleast hex 20 str 1 hex 20 str digit
+	hex 20 str after hex 20 str sign hex 20 str if hex 20 str present, hex 20 str and hex 20 str number
+	hex 20 str must hex 20 str not hex 20 str exceed hex 20 str exponent hex 20 str limit hex 20
+	str (i.e. hex 20 str 1.7976931348623157e+308). hex 0A hex 00
+SECTION_END
+
+; Host handles files, copies source into memory, and calls main().

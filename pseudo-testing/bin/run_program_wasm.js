@@ -10,6 +10,9 @@ const imports = {
         print_i32: (value) => {
             console.log(value);
         },
+        print_f32: (value) => {
+            console.log(value);
+        },
     },
 };
 

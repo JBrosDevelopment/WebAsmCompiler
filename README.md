@@ -36,6 +36,7 @@ I will update the README as I progress through the project. Treat this almost as
       - [assembler.0.4 - Adding ascii keyword](#assembler04---adding-ascii-keyword)
       - [assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler)
       - [assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`](#assembler06---added-strings-to-data-section-fixed-bug-by-adding-error-message-and-optimized-assembler-with-sleb)
+      - [assembler.0.7 - Encoding Floating Points Numbers](#assembler07---encoding-floating-points-numbers)
 
 # Setting Up WebAsm
 
@@ -466,10 +467,16 @@ Right now, we want to be able to encode number and bytes in a bunch of different
 - `uleb` - Unsigned LEB128, e.g. `uleb 255` = 255
 - `str` - String, e.g. `str Hello` = 72 101 108 108 111
   - Remember usually the length of strings is required before the string, so use `uleb 3 str abc` to encode the string "abc" with the length of 3 before it.
-- `ascii` *[Added in assembler.0.4]* - Encodes a single ASCII character as a positive signed LEB128 value for instructions: `ascii a` = `97` but the bytes are `0xE1 0x00`.
+- `ascii` [*[Added in assembler.0.4]*](#assembler04---adding-ascii-keyword) - Encodes a single ASCII character as a positive signed LEB128 value for instructions: `ascii a` = `97` but the bytes are `0xE1 0x00`.
   - ASCII values below 64 use one byte; values from 64 through 127 require two bytes to preserve the positive sign.
   - `str` writes raw bytes. For example, `str a` emits `0x61`, which `i32.const` interprets as `-31` because its immediate uses signed LEB128.
   - Use `ascii` for character constants and `str` for raw string data, such as import and export names.
+- `sleb` [*[Added in assembler.0.5]*](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler) - Encodes in Signed LEB128, e.g. `sleb -50`
+  - This is useful for the CODE section especially with `i32.const` which expects its immidiete to be in SLEB 128 format.
+- `float32` [*[Added in assembler.0.7]*](#assembler07---encoding-floating-points-numbers) - Encodes 4 byte floating point numbers: `float32 1.5` = `00 00 C0 3F`
+  - This data type is only useful for operands that expect floating point numbers like `f32.const`
+- `float64` [*[Added in assembler.0.7]*](#assembler07---encoding-floating-points-numbers) - Encodes 8 byte floating point numbers: `float 1.5` = `00 00 00 00 00 00 F8 3F`
+  - This data type is only useful for operands that expect floating point numbers like `f64.const`
 
 ### Comments
 
@@ -872,7 +879,7 @@ The `sleb` keyword will encode a value according to the Signed LEB128 format. Th
 
 The way strings are implemented is a bunch of addresses and in the main function setting the values in these a addresses to their corresponding characters. This is unnecessary and the better thing to do is to set these strings in memory. To fix this I'll add the DATA Section to the assembler. The [specs of this section can be found above](#data-section-added-in-assembler05). The next update I'll make it actually add the strings to the DATA section. This update will be for the implementation of it.
 
-The next thing is implementing the `ascii` keyword into the assembler to optimize the binary, saving a lot of space.
+The next thing is implementing the `ascii` keyword into the assembler to optimize the binary, saving a lot of space (19kb -> 17kb).
 
 #### assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`
 
@@ -895,3 +902,24 @@ i32.const sleb 76
 ```
 
 To encode the correct number.
+
+The binary is 12,287 bytes, down from 17,218 bytes for 0.5. The smallest assembler yet! The DATA section for strings along with the sleb keyword for encoding saved a lot more space than I thought it would.
+
+#### assembler.0.7 - Encoding Floating Points Numbers
+
+This update allows a way to encode Floating Point numbers. This is to start experimenting with f32 and f64 operations and for future work with the compiler supporting floats. I wanted to make one encoding keyword `float`, but I don't think there's a way to do this when differentiating between 4 and 8 byte floats. This is because `f64.const` expects 8 immediate bytes, while `f32.const` expects 4 immediate bytes. 
+
+It turns out floating point arithmatic is a beast. This was not easy for me to understand. [This article](https://eryktr.github.io/2022/06/representation-of-numbers-in-computer-memory-iee754.html) by [Eryk Trzeciakiewicz](https://eryktr.github.io/author/eryktr/) was a very helpful source in trying to understand how this works. After even learning how it worked I tried my best to implement these functions into the FullAssembler.py file, but I had ChatGPT check it to make sure I did it correct and unsurprisingly its version was far better than mine. I ended up just using ChatGPT's version so I didn't have to worry about my code breaking. 
+
+Here is an example of using the new `float32` and `float64` keywords
+
+```
+f32.const float32 -50.31
+f32.const float32 1.1
+f32.add
+
+f64.const float64 400.0001
+f64.floor
+```
+
+This update will also add new error messages around encoding floats
