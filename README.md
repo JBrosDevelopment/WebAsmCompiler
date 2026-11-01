@@ -25,7 +25,6 @@ I will update the README as I progress through the project. Treat this almost as
     - [IMPORT Section](#import-section)
     - [FUNCTION Section](#function-section)
     - [MEMORY Section](#memory-section)
-    - [GLOBAL Section](#global-section)
     - [EXPORT Section](#export-section)
     - [CODE Section](#code-section)
     - [DATA Section *\[Added in Assembler.0.5\]*](#data-section-added-in-assembler05)
@@ -512,7 +511,6 @@ This will allow the assembler to start counting bytes when it sees the `SECTION`
 - `SECTION_IMPORT` - Import Section -> Converts to `0x02`
 - `SECTION_FUNCTION` - Function Section -> Converts to `0x03`
 - `SECTION_MEMORY` - Memory Section -> Converts to `0x05`
-- `SECTION_GLOBAL` - Global Section -> Converts to `0x06`
 - `SECTION_EXPORT` - Export Section -> Converts to `0x07`
 - `SECTION_CODE` - Code Section -> Converts to `0x0A`
 - `SECTION_DATA` *[Added in assembler.0.5]* - Data Section -> Converts to `0x0B`
@@ -567,17 +565,6 @@ The memory section won't be used much in the beginning, so for now I will just k
 SECTION SECTION_MEMORY
 ; 1 page of memory, no max, min size 1 page. Define variable for memory index 0
 uleb 1 uleb 0 uleb 1 #memory 0
-SECTION_END
-```
-
-### GLOBAL Section
-
-The global section is for defining global variables that can be used in the program. The following is an example of how to define a global variable in the GLOBAL section:
-
-```
-SECTION SECTION_GLOBAL
-uleb 1
-i32 IMMUTABLE const uleb 45 end #global_var 0
 SECTION_END
 ```
 

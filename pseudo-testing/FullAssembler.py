@@ -5,59 +5,88 @@ input_code = list(
 SECTION_HEADER
 
 SECTION SECTION_TYPE
-COUNT FUNCTION uleb 1 i32 uleb 0 #print_i32_type 0
-COUNT FUNCTION uleb 1 f32 uleb 0 #print_f32_type 1
-COUNT FUNCTION uleb 0 uleb 0 #main_type 2
-COUNT FUNCTION uleb 1 i32 uleb 1 i32 #double_i32_type 3
-COUNT FUNCTION uleb 1 f32 uleb 1 f32 #double_f32_type 4
+COUNT FUNCTION uleb 1 i32 uleb 0 #t_i32__void 0
+COUNT FUNCTION uleb 1 i64 uleb 0 #t_i64__void 1
+COUNT FUNCTION uleb 1 f32 uleb 0 #t_f32__void 2
+COUNT FUNCTION uleb 1 f64 uleb 0 #t_f64__void 3
+COUNT FUNCTION uleb 0 uleb 0 #t_void__void 4
+
+; new type syntax
+define_type FUNCTION f64 f64 -> f64 
+; defines as well: #t_f64_f64__f64 5 
+
 SECTION_END
 
 SECTION SECTION_IMPORT
-COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $print_i32_type #print_i32 0
-COUNT uleb 3 str env uleb 9 str print_f32 FUNCTION_KIND $print_f32_type #print_f32 1
+COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $t_i32__void #f_print_i32 0
+COUNT uleb 3 str env uleb 9 str print_i64 FUNCTION_KIND $t_i64__void #f_print_i64 1
+COUNT uleb 3 str env uleb 9 str print_f32 FUNCTION_KIND $t_f32__void #f_print_f32 3
+COUNT uleb 3 str env uleb 9 str print_f64 FUNCTION_KIND $t_f64__void #f_print_f64 4
+
+; new import syntax
+define_import FUNCTION_KIND $t_f64__void env print_result
+; defines as well: #f_print_result 5
+
 SECTION_END
 
 SECTION SECTION_FUNCTION
-COUNT $main_type #main 2
-COUNT $double_i32_type #double_i32 3
-COUNT $double_f32_type #double_f32 4
+COUNT $t_void__void #f_main 5
+
+; new function syntax
+define_function $t_f64_f64__f64 pythagorean 
+; defines as well: #f_pythagorean 6
+
 SECTION_END
 
 SECTION SECTION_EXPORT
-COUNT uleb 4 str main FUNCTION_KIND $main
+COUNT uleb 4 str main FUNCTION_KIND $f_main
+
+; new export syntax
+define_export FUNCTION_KIND $f_main main
+
 SECTION_END
 
 SECTION SECTION_CODE
 
 COUNT FUNCTION_START ; main()
-    uleb 0
-    i32.const sleb 99
-    call $double_i32
-    call $print_i32_type
+    LOCALS LOCALS_NONE
 
-    f32.const float32 -0.001
-    call $double_f32
-    call $print_f32_type
+    f64.const 3.0
+    f64.const 4.0
+    call $f_pythagorean
+
+    call $f_print_result
+
     end
 FUNCTION_END
 
-COUNT FUNCTION_START ; double_i32(i32) -> i32
-    uleb 0 #input 0
-    local.get $input
-    local.get $input
-    i32.add
-    end
-FUNCTION_END
+define_code f64 a f64 b ; pythagorean(a, b)
+    LOCALS f64 c
 
-COUNT FUNCTION_START ; double_f32(f32) -> f32
-    uleb 0 #input 0
-    local.get $input
-    local.get $input
-    f32.add
+    ; c = sqrt(a^2 + b^2)
+    local.get $a
+    local.get $a
+    f64.mul
+    local.get $b
+    local.get $b
+    f64.mul
+    f64.add
+    f64.sqrt
+    local.set $c
+
+    ; return c
+    local.get $c
     end
-FUNCTION_END
+define_code_end
 
 SECTION_END
+
+; if I did do MEMORY or DATA:
+; define_memory 0 97
+; define_import MEMORY_KIND 0 env memory
+; define_data active $destination STRING "Hello World!"
+; define_data active $destination DATA str Hello hex 20 str World!
+
 """)
 
 memory = list([0] * (len(input_code) + 17))
@@ -158,7 +187,6 @@ s_ois_TYPE = "TYPE\0"
 s_ois_IMPORT = "IMPORT\0"
 s_ois_FUNCTION = "FUNCTION\0"
 s_ois_MEMORY = "MEMORY\0"
-s_ois_GLOBAL = "GLOBAL\0"
 s_ois_EXPORT = "EXPORT\0"
 s_ois_CODE = "CODE\0"
 s_ois_DATA = "DATA\0"
@@ -355,8 +383,6 @@ def error(index, value):
         print_string(s_ois_FUNCTION)
     if CURRENT_SECTION == 0x05:
         print_string(s_ois_MEMORY)
-    if CURRENT_SECTION == 0x06:
-        print_string(s_ois_GLOBAL)
     if CURRENT_SECTION == 0x07:
         print_string(s_ois_EXPORT)
     if CURRENT_SECTION == 0x0A:
@@ -1205,9 +1231,6 @@ def parseWord(index: int) -> int:
         return index + 16
     if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('M'), ord('E'), ord('M'), ord('O'), ord('R'), ord('Y')):
         CURRENT_SECTION = 0x05
-        return index + 14
-    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('G'), ord('L'), ord('O'), ord('B'), ord('A'), ord('L')):
-        CURRENT_SECTION = 0x06
         return index + 14
     if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('E'), ord('X'), ord('P'), ord('O'), ord('R'), ord('T')):
         CURRENT_SECTION = 0x07
