@@ -1063,7 +1063,7 @@ This whole transition was a difficult process and took me a minute to wrap my he
 
 #### assembler.1.0 - Adding WASI to the Assembler
 
-Version 1.0 adds WASI support to the assembler.
+Version 1.0 adds WASI support to the assembler. \
 The following host functions will be reimplemented in WAL:
 
 | Existing function 	| New implementation										   	|
@@ -1074,7 +1074,7 @@ The following host functions will be reimplemented in WAL:
 | write_char(value)		| Append a byte to an output buffer								|
 | exit_program(status)	| Exit through WASI proc_exit 									|
 
-This update adds WASI imports used by the diagnostic helpers,
+This update adds WASI imports used by the diagnostic helpers, \
 input loader, output writer, and program termination.
 * fd_read(i32, i32, i32, i32) -> i32
 * fd_write(i32, i32, i32, i32) -> i32
@@ -1082,26 +1082,22 @@ input loader, output writer, and program termination.
 
 For the fd_read and fd_write, here are the following parameters and their meanings:
 
-Parameters:
-1. fd (i32): Descriptor to read from or write to.
-   Standard descriptors: 0 = stdin, 1 = stdout, 2 = stderr.
-2. iovs_ptr (i32): Pointer to an array of iovec structures in linear memory.
-   fd_read: buffers receiving bytes from the descriptor.
-   fd_write: buffers containing bytes to send to the descriptor.
-3. iovs_len (i32): Number of iovec structures in the array.
-4. bytes_transferred_ptr (i32): Pointer to a 32-bit byte count in memory.
-   Named nread_ptr for fd_read and nwritten_ptr for fd_write.
+| Parameters |
+|------------------------------------------------------------------------------------------|
+| 1. fd (i32): Descriptor to read from or write to. Standard descriptors: 0 = stdin, 1 = stdout, 2 = stderr. |
+| 2. iovs_ptr (i32): Pointer to an array of iovec structures in linear memory. fd_read: buffers receiving bytes from the descriptor. fd_write: buffers containing bytes to send to the descriptor. |
+| 3. iovs_len (i32): Number of iovec structures in the array. |
+| 4. bytes_transferred_ptr (i32): Pointer to a 32-bit byte count in memory. Named nread_ptr for fd_read and nwritten_ptr for fd_write. |
 
 | Return Value |
 |------------------------------------------------------------------------------------------|
 | Returns a WASI errno (error code) as an i32. 0 (__WASI_ERRNO_SUCCESS) means success. 	   |
 | Non-zero values indicate an error (e.g., __WASI_ERRNO_BADF for invalid file descriptor). |
-|
 
-In WASI, the entry function is `_start`. WASI can also help take care of reading the file so that this doesn't have to be done by the JS host. 
+In WASI, the entry function is `_start`. WASI can also help take care of reading the file so that this doesn't have to be done by the JS host. \
 The outline below will show this take place.
 
-WASI can read command line arguments so creating a simple CLI for the assembler will keep the need from the host to import the file to memory.
+WASI can read command line arguments so creating a simple CLI for the assembler will keep the need from the host to import the file to memory. \
 A simple CLI would have to import this from WASI:
 * **args_sizes_get**: Determine argument count and storage requirements
 * **args_get**: Copy argument pointers and strings into memory
@@ -1115,22 +1111,25 @@ When done the assembler interface could look like this:
 > wasmtime --dir . assembler.wasm input.wal output.wasm
 ```
 
-This CLI will be handled in the functions: `handle_cli_input() -> void` and `handle_cli_output() -> void`
+This CLI will be handled in the functions: `handle_cli_input() -> void` and `handle_cli_output() -> void` \
 The execution flow will be as follows:
 
-This version targets WASI Preview 1.
-Imports come from wasi_snapshot_preview1.
+This version targets WASI Preview 1. \
+Imports come from wasi_snapshot_preview1. \
 Export _start() -> void and linear memory as "memory".
 
-_start():
+```
+_start(): 
   handle_cli_input()
   main()
   handle_cli_output()
   return successfully
+```
 
-Any failure prints a diagnostic to stderr and exits with
+Any failure prints a diagnostic to stderr and exits with \
 a nonzero status. Assembly failure must not continue to output.
 
+```
 handle_cli_input():
   Obtain argument count and argument-buffer size.
   Reserve bounded storage and read the arguments.
@@ -1145,25 +1144,29 @@ handle_cli_input():
   Append a newline if needed for the current parser.
   Append 17 zero bytes, with space reserved beforehand.
   Initialize the output-buffer length to zero.
+```
 
-The complete generated binary is buffered in memory.
-The output file is opened only after assembly succeeds.
-The output buffer must not overlap source or assembler workspace.
+The complete generated binary is buffered in memory. \
+The output file is opened only after assembly succeeds. \
+The output buffer must not overlap source or assembler workspace. \
 
+```
 write_char(value):
   Ensure the output buffer has room.
   Append one byte.
   Increment the output length.
+```
 
+```
 handle_cli_output():
   Open the output with write access and create/truncate flags.
   Write exactly OUTPUT_LENGTH bytes, handling partial writes.
   Treat a successful zero-byte write with data remaining
   as a failure to avoid an infinite loop.
   Close the output file and check the result.
+```
 
-
-This update will also add the supplied input filename to error output.
+This update will also add the supplied input filename to error output. \
 Display the guest-visible input path; do not assume an absolute host path.
 ```
 PS D:\WebAsmCompiler> wasmtime --dir . assembler.wasm program.wal program.wasm
@@ -1175,5 +1178,5 @@ i32.const $x
 Program Fault.
 ```
 
-This update has a major change in direction for this project by adding WASI so it deserves to be the assembler.1.0 update. 
+This update has a major change in direction for this project by adding WASI so it deserves to be the assembler.1.0 update. \ 
 A few more updates will come before the assembler is in a position to be ready for the compiler to use it. 
