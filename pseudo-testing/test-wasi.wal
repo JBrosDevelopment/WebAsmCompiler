@@ -1,0 +1,185 @@
+; WASI Preview 1 command: sqrt(6*6 + 7*7), calculated entirely with f32.
+; Prints six fractional digits (truncated) using WASI fd_write.
+; The formatter is specific to this positive, single-integer-digit result.
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+    COUNT FUNCTION uleb 4 i32 i32 i32 i32 uleb 1 i32 #t_write 0
+    COUNT FUNCTION uleb 0 uleb 0 #t_start 1
+    COUNT FUNCTION uleb 2 f32 f32 uleb 1 f32 #t_pythagorean 2
+    COUNT FUNCTION uleb 1 f32 uleb 0 #t_print_f32 3
+    COUNT FUNCTION uleb 2 i32 i32 uleb 0 #t_write_stdout 4
+SECTION_END
+
+SECTION SECTION_IMPORT
+    COUNT uleb 22 str wasi_snapshot_preview1
+    uleb 8 str fd_write FUNCTION_KIND $t_write #f_write 0
+SECTION_END
+
+SECTION SECTION_FUNCTION
+    COUNT $t_start #f_start 1
+    COUNT $t_pythagorean #f_pythagorean 2
+    COUNT $t_print_f32 #f_print_f32 3
+    COUNT $t_write_stdout #f_write_stdout 4
+SECTION_END
+
+SECTION SECTION_MEMORY
+    uleb 1 uleb 0 uleb 1
+SECTION_END
+
+SECTION SECTION_EXPORT
+    COUNT uleb 6 str _start FUNCTION_KIND $f_start
+    COUNT uleb 6 str memory MEMORY_KIND uleb 0
+SECTION_END
+
+SECTION SECTION_CODE
+    COUNT FUNCTION_START ; _start()
+        uleb 0
+        f32.const float32 6.0
+        f32.const float32 7.0
+        call $f_pythagorean
+        call $f_print_f32
+        end
+    FUNCTION_END
+
+    COUNT FUNCTION_START ; pythagorean(f32 a, f32 b) -> f32
+        uleb 0
+        #a 0
+        #b 1
+        local.get $a
+        local.get $a
+        f32.mul
+        local.get $b
+        local.get $b
+        f32.mul
+        f32.add
+        hex 91 ; f32.sqrt: current assembler lacks this mnemonic.
+        end
+    FUNCTION_END
+
+    ; Example formatter: positive values below 10, six truncated fractional digits.
+    ; Uses bytes 16..24 for text; this is not a general float formatter.
+    COUNT FUNCTION_START ; print_f32(f32 value) -> void
+        uleb 1 ; One group of two extra i32 locals.
+        uleb 2 i32
+        #fraction 0 ; f32 parameter
+        #digit 1
+        #position 2
+
+        ; Write the single integer digit at address 16.
+        local.get $fraction
+        hex A8 ; i32.trunc_f32_s
+        local.set $digit
+        i32.const sleb 16
+        local.get $digit
+        i32.const sleb 48
+        i32.add
+        i32.store8 uleb 0 uleb 0
+
+        ; Retain the fractional part as f32.
+        local.get $fraction
+        local.get $digit
+        hex B2 ; f32.convert_i32_s
+        f32.sub
+        local.set $fraction
+
+        i32.const sleb 17
+        i32.const sleb 46 ; '.'
+        i32.store8 uleb 0 uleb 0
+
+        i32.const sleb 18
+        local.set $position
+        loop NO_RETURN
+            local.get $fraction
+            f32.const float32 10.0
+            f32.mul
+            local.set $fraction
+            local.get $fraction
+            i32.trunc_f32_s
+            local.set $digit
+
+            local.get $position
+            local.get $digit
+            i32.const sleb 48
+            i32.add
+            i32.store8 uleb 0 uleb 0
+
+            local.get $fraction
+            local.get $digit
+            f32.convert_i32_s
+            f32.sub
+            local.set $fraction
+
+            local.get $position
+            i32.const sleb 1
+            i32.add
+            local.set $position
+            local.get $position
+            i32.const sleb 24
+            i32.lt_u
+            br_if uleb 0
+        end
+
+        i32.const sleb 24
+        i32.const hex 0A ; newline
+        i32.store8 uleb 0 uleb 0
+
+        i32.const sleb 16
+        i32.const sleb 9
+        call $f_write_stdout
+        end
+    FUNCTION_END
+
+    ; Write a byte range to stdout, retrying partial writes.
+    ; Scratch: iovec at 0..7 and returned byte count at 8..11.
+    ; The supplied byte range must not overlap that scratch memory.
+    COUNT FUNCTION_START ; write_stdout(i32 pointer, i32 length) -> void
+        uleb 1
+        uleb 1 i32
+        #write_position 0
+        #write_remaining 1
+        #written 2
+
+        local.get $write_remaining
+        i32.eqz
+        if NO_RETURN
+            return
+        end
+        loop NO_RETURN
+            i32.const sleb 0
+            local.get $write_position
+            i32.store uleb 2 uleb 0
+            i32.const sleb 4
+            local.get $write_remaining
+            i32.store uleb 2 uleb 0
+
+            i32.const sleb 1 ; stdout
+            i32.const sleb 0 ; iovec pointer
+            i32.const sleb 1 ; one iovec
+            i32.const sleb 8 ; bytes-written pointer
+            call $f_write
+            if NO_RETURN
+                hex 00 ; unreachable: write failed
+            end
+            i32.const sleb 8
+            i32.load uleb 2 uleb 0
+            local.set $written
+            local.get $written
+            i32.eqz
+            if NO_RETURN
+                hex 00 ; unreachable: no progress
+            end
+            local.get $write_position
+            local.get $written
+            i32.add
+            local.set $write_position
+            local.get $write_remaining
+            local.get $written
+            i32.sub
+            local.set $write_remaining
+            local.get $write_remaining
+            br_if uleb 0
+        end
+        end
+    FUNCTION_END
+SECTION_END

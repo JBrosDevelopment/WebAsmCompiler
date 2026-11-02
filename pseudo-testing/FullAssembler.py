@@ -1,132 +1,60 @@
-import os
+import sys
+from pathlib import Path
 
-input_code = list(
-"""
-SECTION_HEADER
+# soon to add opcode: sqrt
+# soon to add syntax:
+# new import syntax
+#   define_import FUNCTION_KIND $t_f64__void env print_result   -   defines as well: #f_print_result 5
+# new type syntax
+#   define_type FUNCTION f64 f64 -> f64                         -   defines as well: #t_f64_f64__f64 5 
+# new function syntax
+#   define_function $t_f64_f64__f64 pythagorean                 -   defines as well: #f_pythagorean 6
+# new export syntax
+#   define_export FUNCTION_KIND $f_main main
+# new memory syntax
+#   define_memory 0 97
+#   define_import MEMORY_KIND 0 env memory
+# new data syntax
+#   define_data active $destination STRING "Hello World!"
+#   define_data active $destination DATA str Hello hex 20 str World!
+# code syntax
+#   define_code f64 a f64 b ; pythagorean(a, b)
+#   LOCALS f64 c
+#   define_code_end
 
-SECTION SECTION_TYPE
-COUNT FUNCTION uleb 1 i32 uleb 0 #t_i32__void 0
-COUNT FUNCTION uleb 1 i64 uleb 0 #t_i64__void 1
-COUNT FUNCTION uleb 1 f32 uleb 0 #t_f32__void 2
-COUNT FUNCTION uleb 1 f64 uleb 0 #t_f64__void 3
-COUNT FUNCTION uleb 0 uleb 0 #t_void__void 4
+# Capacities, 4 MiB
+INPUT_LIMIT = 4 * 1024 * 1024 # global
+OUTPUT_LIMIT = 4 * 1024 * 1024 # global
+EOF_PADDING = 17 # global
 
-; new type syntax
-define_type FUNCTION f64 f64 -> f64 
-; defines as well: #t_f64_f64__f64 5 
+memory = [] # global memory
+output_buffer = [] # global output buffer
 
-SECTION_END
+sectionMemory = list([0] * 1024 * 1024) # global
+functionMemory = list([0] * 1024 * 1024) # global
 
-SECTION SECTION_IMPORT
-COUNT uleb 3 str env uleb 9 str print_i32 FUNCTION_KIND $t_i32__void #f_print_i32 0
-COUNT uleb 3 str env uleb 9 str print_i64 FUNCTION_KIND $t_i64__void #f_print_i64 1
-COUNT uleb 3 str env uleb 9 str print_f32 FUNCTION_KIND $t_f32__void #f_print_f32 3
-COUNT uleb 3 str env uleb 9 str print_f64 FUNCTION_KIND $t_f64__void #f_print_f64 4
+output_path = "" # global
+input_name = "" # global
 
-; new import syntax
-define_import FUNCTION_KIND $t_f64__void env print_result
-; defines as well: #f_print_result 5
+# imported WASI function, did not use nread_ptr, but WAL version would write the number of bytes read to memory at that address.
+# WASI will implement this function in the WAL version.
+def fd_read(fd, iovs_ptr, iovs_len, nread_ptr):
+    iovs_ptr.extend(fd.read(iovs_len))
+    return 0
 
-SECTION_END
+# imported WASI function, did not use nwritten_ptr, but WAL version would write the number of bytes written to memory at that address.
+# WASI will implement this function in the WAL version. 
+def fd_write(fd, iovs_ptr, iovs_len, nwritten_ptr): 
+    if fd == 2:
+        fd = sys.stderr.buffer
+    written = fd.write(bytes(iovs_ptr[:iovs_len]))
+    if written != iovs_len:
+        exit_program(1)
+    return 0
 
-SECTION SECTION_FUNCTION
-COUNT $t_void__void #f_main 5
-
-; new function syntax
-define_function $t_f64_f64__f64 pythagorean 
-; defines as well: #f_pythagorean 6
-
-SECTION_END
-
-SECTION SECTION_EXPORT
-COUNT uleb 4 str main FUNCTION_KIND $f_main
-
-; new export syntax
-define_export FUNCTION_KIND $f_main main
-
-SECTION_END
-
-SECTION SECTION_CODE
-
-COUNT FUNCTION_START ; main()
-    LOCALS LOCALS_NONE
-
-    f64.const 3.0
-    f64.const 4.0
-    call $f_pythagorean
-
-    call $f_print_result
-
-    end
-FUNCTION_END
-
-define_code f64 a f64 b ; pythagorean(a, b)
-    LOCALS f64 c
-
-    ; c = sqrt(a^2 + b^2)
-    local.get $a
-    local.get $a
-    f64.mul
-    local.get $b
-    local.get $b
-    f64.mul
-    f64.add
-    f64.sqrt
-    local.set $c
-
-    ; return c
-    local.get $c
-    end
-define_code_end
-
-SECTION_END
-
-; if I did do MEMORY or DATA:
-; define_memory 0 97
-; define_import MEMORY_KIND 0 env memory
-; define_data active $destination STRING "Hello World!"
-; define_data active $destination DATA str Hello hex 20 str World!
-
-""")
-
-memory = list([0] * (len(input_code) + 17))
-
-for i in range(len(input_code)):
-    memory[i] = ord(input_code[i])
-
-output_directory = os.path.join(os.path.dirname(__file__), "bin")
-os.makedirs(output_directory, exist_ok=True)
-output_file = open(os.path.join(output_directory, "program.wasm"), "wb")
-
-def print_i32(value): # import
-    print(value, end='')
-
-def print_char(value): # import
-    print(chr(value), end='')
-
-def print_string(pointer: (int|str)):
-    print(pointer, end='')
-    # this is not real implementation of print_string, because strings in the WebAsm assembley
-    # the parameter `pointer` is not actually a pointer at all in this python context, it is a python str object. 
-
-def write_char(char): # import
-    output_file.write(bytearray([char]))
-
-    length_of_number = len(str(char))
-    string_of_number = str(char) + "," + " " * (4 - length_of_number)
-
-    if char >= 32 and char <= 126:
-        #print("write: " + string_of_number + "'" + chr(char) + "'")
-        pass
-    else:
-        #print("write: " + string_of_number + "0x" + format(char, "02X"))
-        pass
-
-def exit_program(errCode): # import
-    exit(errCode)
-
-sectionMemory = list([0] * max(1024 * 1024, len(input_code))) # global
-functionMemory = list([0] * max(1024 * 1024, len(input_code))) # global
+# imported WASI function
+def proc_exit(status):
+    sys.exit(status)
 
 SECTION_BYTES_OUT = 0 # global
 SECTION_LAST_BYTES_OUT = 0 # global
@@ -179,9 +107,9 @@ s_ldne_start = "Label `\0"
 s_ldne_end = "` does not exist.\n\0"
 s_ecind_start = "Error Code `\0"
 s_ecind_end = "` is not defined.\n\0"
-s_eool_start = "Error occured on line `\0"
+s_eool_start = "Error occurred on line `\0"
 s_eool_end = "`.\n\0"
-s_ois_start = "Occured in Section `\0"
+s_ois_start = "Occurred in Section `\0"
 s_ois_end = "`.\n\0"
 s_ois_TYPE = "TYPE\0"
 s_ois_IMPORT = "IMPORT\0"
@@ -192,14 +120,162 @@ s_ois_CODE = "CODE\0"
 s_ois_DATA = "DATA\0"
 s_pf = "Program Fault.\0"
 
+# runtime error strings
+s_output_limit = "Generated binary exceeds the output buffer capacity\0"
+s_cli_arguments = "Expected two arguments: python FullAssembler.py input.wal output.wasm\0"
+s_input_file = "Input file does not exist or is not a regular file\0"
+s_same_input_output = "Input and output must be different files\0"
+s_input_limit = "Source exceeds the input region capacity\0"
+s_non_ascii_source = "Source must contain only ASCII bytes\0"
+s_nul_source = "Source must not contain embedded NUL bytes\0"
+s_eof_padding = "Source leaves insufficient room for EOF padding\0"
+s_output_directory = "Output directory does not exist\0"
+s_output_file = "Output path is not a regular file\0"
+s_function_capacity = "Function scratch buffer capacity exceeded\0"
+s_section_capacity = "Section scratch buffer capacity exceeded\0"
+s_symbol_names_capacity = "Symbol-name buffer capacity exceeded\0"
+s_symbol_values_capacity = "Symbol-value buffer capacity exceeded\0"
+
+def print_i32(value):
+    value = value & 0xFFFFFFFF
+    negative = value >= 0x80000000
+    if negative:
+        value = 0x100000000 - value
+    digits = bytearray()
+    while True:
+        digits.append(48 + value % 10)
+        value //= 10
+        if value == 0:
+            break
+    if negative:
+        digits.append(45)
+    digits.reverse()
+    fd_write(2, digits, len(digits), 0)
+
+def print_char(value):
+    fd_write(2, bytes([value & 255]), 1, 0) # bytes([value & 255]) just means an array of one byte with the value of value & 255 
+
+def print_string(value: str):
+    # Python strings stand in for WAL pointers to zero-terminated strings.
+    data = value.split("\0", 1)[0].encode("utf-8")
+    fd_write(2, data, len(data), 0)
+
+def write_char(char: int):
+    if len(output_buffer) >= OUTPUT_LIMIT:
+        runtime_error(s_output_limit)
+    output_buffer.append(char)
+
+def exit_program(status):
+    proc_exit(status)
+
+def runtime_error(message: str):
+    print_string("Assembler: ")
+    print_string(message)
+    print_char(10)
+    exit_program(1)
+
+def handle_cli_input():
+    global output_path, input_name, memory
+
+    if len(sys.argv) != 3:
+        # The `python` command will not be in the WAL version, this is for the Python Pseudo-Testing version.
+        runtime_error(s_cli_arguments)
+
+    input_name = sys.argv[1]
+    source_path = Path(input_name)
+    output_path = Path(sys.argv[2])
+
+    # validate the input and output paths
+    if not source_path.is_file():
+        runtime_error(s_input_file)
+    if (source_path.resolve() == output_path.resolve() or (output_path.exists() and source_path.samefile(output_path))):
+        runtime_error(s_same_input_output)
+
+    # Read the source bytes into source, up to the input limit plus one extra byte to detect overflow.
+    source = bytearray()
+    with source_path.open("rb") as source_file:
+        fd_read(source_file, source, INPUT_LIMIT + 1, 0)
+
+    source_length = len(source) # in wasi, the nread_ptr would be used to get source byte count, but to simplify fd_read, len(source) is used
+
+    if source_length > INPUT_LIMIT:
+        runtime_error(s_input_limit)
+
+    # Validate the source bytes.
+    index = 0
+    while index < source_length:
+        character = source[index]
+        if character > 127:
+            runtime_error(s_non_ascii_source)
+        if character == 0:
+            runtime_error(s_nul_source)
+        index += 1
+
+    # Normalize line endings in place - The write position never moves ahead of the read position.
+    # This is for CRLF normalization for end of line: `\n`, `\r\n`, `\r` -> `\n`
+    read_index = 0
+    write_index = 0
+    while read_index < source_length:
+        character = source[read_index]
+        read_index += 1
+        if character == 13:  # CR
+            character = 10  # Replace with LF.
+            # Consume the LF following CR, if present.
+            if read_index < source_length:
+                if source[read_index] == 10:
+                    read_index += 1
+
+        source[write_index] = character
+        write_index += 1
+
+    source_length = write_index
+
+    # Determine whether a trailing newline is needed.
+    needs_newline = 1
+    if source_length > 0:
+        if source[source_length - 1] == 10:
+            needs_newline = 0
+
+    # Reserve space for the newline and EOF padding before writing them.
+    if source_length + needs_newline + EOF_PADDING > INPUT_LIMIT:
+        runtime_error(s_eof_padding)
+
+    # Allocate destination memory with room for the optional newline and padding.
+    memory = [0] * (source_length + needs_newline + EOF_PADDING)
+
+    # Copy only the normalized source bytes.
+    index = 0
+    while index < source_length:
+        memory[index] = source[index]
+        index += 1
+
+    if needs_newline == 1:
+        memory[source_length] = 10
+        source_length += 1
+
+    # EOF padding is already zero from allocation.
+    output_buffer.clear()
+
+def handle_cli_output():
+    if not output_path.parent.is_dir():
+        runtime_error(s_output_directory)
+    if output_path.exists() and not output_path.is_file():
+        runtime_error(s_output_file)
+    with output_path.open("wb") as output_file:
+        fd_write(output_file, output_buffer, len(output_buffer), 0)
+
 def writeSectionChar(char: int) -> None:
     global SECTION_BYTES_OUT
     global FUNCTION_BYTES_OUT
     global WRITING_TO_FUNCTION
     if WRITING_TO_FUNCTION == 1:
+        if FUNCTION_BYTES_OUT >= len(functionMemory):
+            runtime_error(s_function_capacity)
         functionMemory[FUNCTION_BYTES_OUT] = char
         FUNCTION_BYTES_OUT = FUNCTION_BYTES_OUT + 1
     else:
+        if SECTION_BYTES_OUT >= len(sectionMemory):
+            runtime_error(s_section_capacity)
         sectionMemory[SECTION_BYTES_OUT] = char
         SECTION_BYTES_OUT = SECTION_BYTES_OUT + 1 
 
@@ -389,16 +465,17 @@ def error(index, value):
         print_string(s_ois_CODE)
     if CURRENT_SECTION == 0x0B:
         print_string(s_ois_DATA)
-    print_string(s_ois_end)
+    print_string("` of file `")
+    print_string(input_name)
+    print_string("`.\n")
         
     print_string(s_eool_start)
     print_i32(CURRENT_LINE)
     print_string(s_eool_end)
 
     index_pointer = index
-    while memory[index_pointer] != ord('\n'):
+    while index_pointer > 0 and memory[index_pointer - 1] != ord('\n'):
         index_pointer -= 1
-    index_pointer += 1
     start_of_line = index_pointer
     
     print_char(ord('\n'))
@@ -699,6 +776,13 @@ def writeFloatBits(number: float, negative: int, fraction_bits: int, exponent_bi
         bits >>= 8
         byte_index += 1
 
+def check_symbol_capacity(name_length: int):
+    if symbol_names_stack_index + 3 + name_length > len(symbol_names):
+        runtime_error(s_symbol_names_capacity)
+    if symbol_values_stack_index + 2 > len(symbol_values):
+        runtime_error(s_symbol_values_capacity)
+
+
 def setVariable(index: int) -> int:
     global LAST_SYMBOL_ID
     global symbol_names_stack_index
@@ -723,6 +807,8 @@ def setVariable(index: int) -> int:
 
         if isWhiteSpace(index):
             break
+
+    check_symbol_capacity(variable_name_length)
 
     # Store variable name:
     symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
@@ -822,6 +908,8 @@ def setLabel(index: int) -> int:
 
     if label_length == 0 or LABEL_SCOPE == 0:
         error(label_start, 0x05)
+
+    check_symbol_capacity(label_length)
 
     # Store label name: ID, kind, length, then each character byte.
     symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
@@ -1296,5 +1384,9 @@ def main():
         if index >= len(memory) or index == -67:
             break
 
-main()
-output_file.close()
+def _start():
+    handle_cli_input()
+    main()
+    handle_cli_output()
+
+_start()

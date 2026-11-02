@@ -36,6 +36,11 @@ I will update the README as I progress through the project. Treat this almost as
       - [assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler)
       - [assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`](#assembler06---added-strings-to-data-section-fixed-bug-by-adding-error-message-and-optimized-assembler-with-sleb)
       - [assembler.0.7 - Encoding Floating Points Numbers](#assembler07---encoding-floating-points-numbers)
+  - [Finalizing the Assembler](#finalizing-the-assembler)
+    - [WASI](#wasi)
+      - [WASI Hello World Example](#wasi-hello-world-example)
+    - [Adding WASI to the Assembler](#adding-wasi-to-the-assembler)
+      - [assembler.1.0 - Adding WASI to the Assembler](#assembler10---adding-wasi-to-the-assembler)
 
 # Setting Up WebAsm
 
@@ -910,3 +915,265 @@ f64.floor
 ```
 
 This update will also add new error messages around encoding floats
+
+This update concludes the assembler.0.x versions, the next step is to start the main versions of the assembler with assembler.1.x.
+
+## Finalizing the Assembler
+
+Right now the assembler requires a javascript host to run the WebAsm binary and supply the imported functions. This is makes sense but there is a better way this could be done, and that is to introduce WASI (Web Assembly System Interface) to this assembler. This will allow the javascript host to not have to worry about supplying the imported function, putting the input file into memory, or outputting the results. This can be done with the `wasi` npm package making a universal host for the assembler. This will also allow the assembler to be run in a terminal without having to use node.js with the `wasmtime`. This will be a huge step forward in making this assembler more user friendly and easier to use.
+
+### WASI
+
+WASI is a system interface for WebAssembly that allows WebAssembly modules to interact with the host environment in a standardized way. It provides a set of APIs for performing common tasks such as file I/O, networking, and process management. By using WASI, I can make the assembler more portable and easier to use across different platforms.
+
+#### WASI Hello World Example
+
+Here's a small example of how the WASI could work in this project. The code will needs a `_start` function that will be the entry point of the program. This function will use the `fd_write` function from WASI to write "Hello World!\n" to stdout. The code is as follows:
+
+First here is the WAL code and it will be a simple hello world program.
+
+```
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+    ; Type 0: _start() -> void
+    COUNT FUNCTION uleb 0 uleb 0 #_start_type 0
+
+    ; Type 1: fd_write(fd, iovs, iovs_count, nwritten) -> errno
+    COUNT FUNCTION uleb 4 i32 i32 i32 i32 uleb 1 i32 #fd_write_type 1
+SECTION_END
+
+SECTION SECTION_IMPORT
+    ; Import function index 0 from WASI.
+    COUNT uleb 22 str wasi_snapshot_preview1
+    uleb 8 str fd_write FUNCTION_KIND $fd_write_type
+    #fd_write 0
+SECTION_END
+
+SECTION SECTION_FUNCTION
+    ; Imported functions come first, so _start has function index 1.
+    COUNT $_start_type #start 1
+SECTION_END
+
+SECTION SECTION_MEMORY
+    ; One memory with a minimum size of one page (64 KiB).
+    uleb 1 uleb 0 uleb 1
+SECTION_END
+
+SECTION SECTION_EXPORT
+    COUNT uleb 6 str memory MEMORY_KIND uleb 0
+    COUNT uleb 6 str _start FUNCTION_KIND $start
+SECTION_END
+
+SECTION SECTION_CODE
+    uleb 1
+
+    FUNCTION_START
+        uleb 0 ; No local variables.
+
+        ; Create an iovec: two adjacent i32 values describing our text.
+        ; memory[0..3] = text address, 16.
+        i32.const sleb 0
+        i32.const sleb 16
+        i32.store uleb 2 uleb 0
+
+        ; memory[4..7] = text length, 13 bytes.
+        i32.const sleb 4
+        i32.const sleb 13
+        i32.store uleb 2 uleb 0
+
+        ; fd_write(1, 0, 1, 8)
+        i32.const sleb 1 ; File descriptor 1 means stdout.
+        i32.const sleb 0 ; Address of our iovec.
+        i32.const sleb 1 ; Number of iovecs, not number of bytes.
+        i32.const sleb 8 ; Address where WASI stores bytes written.
+        call $fd_write
+
+        ; fd_write returns an error code: 0 means success.
+        i32.const sleb 0
+        i32.ne
+        if NO_RETURN
+            ; error occured, handle it here
+        end
+
+        end
+    FUNCTION_END
+SECTION_END
+
+SECTION SECTION_DATA
+    ; Active data segment placed at memory address 16.
+    COUNT uleb 0
+    i32.const sleb 16 end
+
+    ; "Hello World!\n" is 13 bytes.
+    uleb 13
+    str Hello hex 20 str World! hex 0A
+SECTION_END
+```
+
+First I'd need to compile it,
+```
+node Assembler/assemble.js 0.7 hello-wasi.wal hello-wasi.wasm
+```
+
+But once it is compiled I could run it with `wasmtime` with the following command:
+
+```
+wasmtime run Assembler/bin/hello-wasi.wasm
+```
+
+Or I could use javascript to host this program with the following code:
+
+```
+import { readFile } from 'node:fs/promises';
+import { WASI } from 'node:wasi';
+
+const wasmPath = process.argv[2];
+
+if (!wasmPath) {
+    throw new Error('Supply a WASM file path');
+}
+
+const wasi = new WASI({
+    version: 'preview1',
+    args: [wasmPath, ...process.argv.slice(3)],
+});
+
+const wasmBytes = await readFile(wasmPath);
+
+const { instance } = await WebAssembly.instantiate(
+    wasmBytes,
+    wasi.getImportObject(),
+);
+
+process.exitCode = wasi.start(instance);
+```
+
+And use node.js to run the program with the following command:
+
+```
+node Assembler/run-wasi.mjs Assembler/bin/hello-wasi.wasm
+```
+
+### Adding WASI to the Assembler
+
+First I needed to install `wasi` from the [GitHub Repo](https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.1). Then I tested the hello world program above and it worked perfectly. Then I used the python `pseudo-testing/FullAssembler.py` to modify the assembler to use `fd_read` and `fd_write` to read and write the input and output files. I also made the CLI for the assembler to be able to run the assembler with command line arguments. I also added runtime error handling and the `_start` function to the assembler. After adding all this in the python file, which was no small feat, I worked on converting the changes to the new assembler.1.0.wal file. 
+
+This whole transition was a difficult process and took me a minute to wrap my head around it. Chat GPT very much helped me with this update, and I was able to verify a lot of its code and for it to verify a lot of my code. 
+
+#### assembler.1.0 - Adding WASI to the Assembler
+
+Version 1.0 adds WASI support to the assembler.
+The following host functions will be reimplemented in WAL:
+
+| Existing function 	| New implementation										   	|
+|-----------------------|---------------------------------------------------------------|
+| print_string(pointer)	| Find the terminator, then write the bytes to stderr			|
+| print_char(value)		| Store one byte in scratch memory and write it to stderr		|
+| print_i32(value)		| Format decimal digits in memory, then write them to stderr	|
+| write_char(value)		| Append a byte to an output buffer								|
+| exit_program(status)	| Exit through WASI proc_exit 									|
+
+This update adds WASI imports used by the diagnostic helpers,
+input loader, output writer, and program termination.
+* fd_read(i32, i32, i32, i32) -> i32
+* fd_write(i32, i32, i32, i32) -> i32
+* proc_exit(i32) -> void
+
+For the fd_read and fd_write, here are the following parameters and their meanings:
+
+Parameters:
+1. fd (i32): Descriptor to read from or write to.
+   Standard descriptors: 0 = stdin, 1 = stdout, 2 = stderr.
+2. iovs_ptr (i32): Pointer to an array of iovec structures in linear memory.
+   fd_read: buffers receiving bytes from the descriptor.
+   fd_write: buffers containing bytes to send to the descriptor.
+3. iovs_len (i32): Number of iovec structures in the array.
+4. bytes_transferred_ptr (i32): Pointer to a 32-bit byte count in memory.
+   Named nread_ptr for fd_read and nwritten_ptr for fd_write.
+
+| Return Value |
+|------------------------------------------------------------------------------------------|
+| Returns a WASI errno (error code) as an i32. 0 (__WASI_ERRNO_SUCCESS) means success. 	   |
+| Non-zero values indicate an error (e.g., __WASI_ERRNO_BADF for invalid file descriptor). |
+|
+
+In WASI, the entry function is `_start`. WASI can also help take care of reading the file so that this doesn't have to be done by the JS host. 
+The outline below will show this take place.
+
+WASI can read command line arguments so creating a simple CLI for the assembler will keep the need from the host to import the file to memory.
+A simple CLI would have to import this from WASI:
+* **args_sizes_get**: Determine argument count and storage requirements
+* **args_get**: Copy argument pointers and strings into memory
+* **fd_prestat_get**: Inspect host-provided directory descriptors
+* **fd_prestat_dir_name**: Read their guest-visible names
+* **path_open**: Open source and output files
+* **fd_close**: Close opened files
+
+When done the assembler interface could look like this:
+```
+> wasmtime --dir . assembler.wasm input.wal output.wasm
+```
+
+This CLI will be handled in the functions: `handle_cli_input() -> void` and `handle_cli_output() -> void`
+The execution flow will be as follows:
+
+This version targets WASI Preview 1.
+Imports come from wasi_snapshot_preview1.
+Export _start() -> void and linear memory as "memory".
+
+_start():
+  handle_cli_input()
+  main()
+  handle_cli_output()
+  return successfully
+
+Any failure prints a diagnostic to stderr and exits with
+a nonzero status. Assembly failure must not continue to output.
+
+handle_cli_input():
+  Obtain argument count and argument-buffer size.
+  Reserve bounded storage and read the arguments.
+  Require program name, input path, and output path.
+  Retain both filename pointers for later use.
+  Locate the host-provided directory used for relative paths.
+  Open the input file and retain its descriptor.
+  Read source bytes in a loop, checking errors and capacity.
+  Close the input file.
+  Reject unsupported non-ASCII source bytes.
+  Normalize CRLF and lone CR into LF.
+  Append a newline if needed for the current parser.
+  Append 17 zero bytes, with space reserved beforehand.
+  Initialize the output-buffer length to zero.
+
+The complete generated binary is buffered in memory.
+The output file is opened only after assembly succeeds.
+The output buffer must not overlap source or assembler workspace.
+
+write_char(value):
+  Ensure the output buffer has room.
+  Append one byte.
+  Increment the output length.
+
+handle_cli_output():
+  Open the output with write access and create/truncate flags.
+  Write exactly OUTPUT_LENGTH bytes, handling partial writes.
+  Treat a successful zero-byte write with data remaining
+  as a failure to avoid an infinite loop.
+  Close the output file and check the result.
+
+
+This update will also add the supplied input filename to error output.
+Display the guest-visible input path; do not assume an absolute host path.
+```
+PS D:\WebAsmCompiler> wasmtime --dir . assembler.wasm program.wal program.wasm
+Error: Variable `x` does not exist.
+Occurred in Section `CODE` of file `program.wal`.
+Error occurred on line `56`:
+i32.const $x
+          ~~
+Program Fault.
+```
+
+This update has a major change in direction for this project by adding WASI so it deserves to be the assembler.1.0 update. 
+A few more updates will come before the assembler is in a position to be ready for the compiler to use it. 
