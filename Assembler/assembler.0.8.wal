@@ -1,119 +1,12 @@
-; Assembler.1.0
-
-; Version 1.0 adds WASI support to the assembler.
-; The following host functions will be reimplemented in WAL:
-; |-------------------------|---------------------------------------------------------------|
-; | Existing function		| New implementation											|
-; |-------------------------|---------------------------------------------------------------|
-; | print_string(pointer)	| Find the terminator, then write the bytes to stderr			|
-; | print_char(value)		| Store one byte in scratch memory and write it to stderr		|
-; | print_i32(value)		| Format decimal digits in memory, then write them to stderr	|
-; | write_char(value)		| Append a byte to an output buffer								|
-; | exit_program(status)	| Exit through WASI proc_exit 									|
-; |-------------------------|---------------------------------------------------------------|
-; 
-; This update adds WASI imports used by the diagnostic helpers,
-; input loader, output writer, and program termination.
-; * fd_read(i32, i32, i32, i32) -> i32
-; * fd_write(i32, i32, i32, i32) -> i32
-; * proc_exit(i32) -> void
+; Assembler.0.8
 ;
-; For the fd_read and fd_write, here are the following parameters and their meanings:
+; Increased The size of the symbol section in memory from 4,096 to 16,384 slots (64 KiB)
 ;
-; Parameters:
-; 1. fd (i32): Descriptor to read from or write to.
-;    Standard descriptors: 0 = stdin, 1 = stdout, 2 = stderr.
-; 2. iovs_ptr (i32): Pointer to an array of iovec structures in linear memory.
-;    fd_read: buffers receiving bytes from the descriptor.
-;    fd_write: buffers containing bytes to send to the descriptor.
-; 3. iovs_len (i32): Number of iovec structures in the array.
-; 4. bytes_transferred_ptr (i32): Pointer to a 32-bit byte count in memory.
-;    Named nread_ptr for fd_read and nwritten_ptr for fd_write.
+; Functions Modified:
+; * setVariable(index: int) -> int
+; * setLabel(index: int) -> int
 ;
-; Return Value:
-; |------------------------------------------------------------------------------------------|
-; | Returns a WASI errno (error code) as an i32. 0 (__WASI_ERRNO_SUCCESS) means success. 	 |
-; | Non-zero values indicate an error (e.g., __WASI_ERRNO_BADF for invalid file descriptor). |
-; |------------------------------------------------------------------------------------------|
-;
-; In WASI, the entry function is `_start`. WASI can also help take care of reading the file so that this doesn't have to be done by the JS host. 
-; The outline below will show this take place.
-; 
-; WASI can read command line arguments so creating a simple CLI for the assembler will keep the need from the host to import the file to memory.
-; A simple CLI would have to import this from WASI:
-; * args_sizes_get			Determine argument count and storage requirements
-; * args_get				Copy argument pointers and strings into memory
-; * fd_prestat_get			Inspect host-provided directory descriptors
-; * fd_prestat_dir_name		Read their guest-visible names
-; * path_open				Open source and output files
-; * fd_close				Close opened files
-;
-; When done the assembler interface could look like this:
-; > wasmtime --dir . assembler.wasm input.wal output.wasm
-;
-; This CLI will be handled in the functions: `handle_cli_input() -> void` and `handle_cli_output() -> void`
-; The execution flow will be as follows:
-; 
-; This version targets WASI Preview 1.
-; Imports come from wasi_snapshot_preview1.
-; Export _start() -> void and linear memory as "memory".
-;
-; _start():
-;   handle_cli_input()
-;   main()
-;   handle_cli_output()
-;   return successfully
-;
-; Any failure prints a diagnostic to stderr and exits with
-; a nonzero status. Assembly failure must not continue to output.
-;
-; handle_cli_input():
-;   Obtain argument count and argument-buffer size.
-;   Reserve bounded storage and read the arguments.
-;   Require program name, input path, and output path.
-;   Retain both filename pointers for later use.
-;   Locate the host-provided directory used for relative paths.
-;   Open the input file and retain its descriptor.
-;   Read source bytes in a loop, checking errors and capacity.
-;   Close the input file.
-;   Reject unsupported non-ASCII source bytes.
-;   Normalize CRLF and lone CR into LF.
-;   Append a newline if needed for the current parser.
-;   Append 17 zero bytes, with space reserved beforehand.
-;   Initialize the output-buffer length to zero.
-;
-; The complete generated binary is buffered in memory.
-; The output file is opened only after assembly succeeds.
-; The output buffer must not overlap source or assembler workspace.
-;
-; write_char(value):
-;   Ensure the output buffer has room.
-;   Append one byte.
-;   Increment the output length.
-;
-; handle_cli_output():
-;   Open the output with write access and create/truncate flags.
-;   Write exactly OUTPUT_LENGTH bytes, handling partial writes.
-;   Treat a successful zero-byte write with data remaining
-;   as a failure to avoid an infinite loop.
-;   Close the output file and check the result.
-;
-; 
-; This update will also add the supplied input filename to error output.
-; Display the guest-visible input path; do not assume an absolute host path.
-; ```
-; PS D:\WebAsmCompiler> wasmtime --dir . assembler.wasm program.wal program.wasm
-; Error: Variable `x` does not exist.
-; Occurred in Section `CODE` of file `program.wal`.
-; Error occurred on line `56`:
-; i32.const $x
-;           ~~
-; Program Fault.
-; ```
-;
-; This update has a major change in direction for this project by adding WASI so it deserves to be the assembler.1.0 update. 
-; A few more updates will come before the assembler is in a position to be ready for the compiler to use it. 
-
+; Both now check symbol-name and symbol-value capacity before insertion.
 
 ; code below:
 
@@ -121,64 +14,64 @@
 #sectionMemory 4194304
 #functionMemory 5242880
 #symbol_names 6291456
-#symbol_values 6307840
+#symbol_values 6356992
 
 ; Mutable global values occupy one four-byte slot each.
-#SECTION_BYTES_OUT 6324224
-#SECTION_LAST_BYTES_OUT 6324228
-#FUNCTION_BYTES_OUT 6324232
-#FUNCTION_LAST_BYTES_OUT 6324236
-#WRITING_TO_FUNCTION 6324240
-#LAST_SYMBOL_ID 6324244
-#CURRENT_SECTION 6324248
-#symbol_names_stack_index 6324252
-#symbol_values_stack_index 6324256
-#LABEL_SCOPE 6324260
-#LABEL_FIRST_SYMBOL_ID 6324264
-#COUNT 6324268
+#SECTION_BYTES_OUT 6422528
+#SECTION_LAST_BYTES_OUT 6422532
+#FUNCTION_BYTES_OUT 6422536
+#FUNCTION_LAST_BYTES_OUT 6422540
+#WRITING_TO_FUNCTION 6422544
+#LAST_SYMBOL_ID 6422548
+#CURRENT_SECTION 6422552
+#symbol_names_stack_index 6422556
+#symbol_values_stack_index 6422560
+#LABEL_SCOPE 6422564
+#LABEL_FIRST_SYMBOL_ID 6422568
+#COUNT 6422572
 
 ; Tracing and zero-terminated diagnostic strings, initialized by the DATA section.
-#CURRENT_LINE 6324272
-#s_ei_start 6324276
-#s_ei_end 6324284
-#s_vdne_start 6324288
-#s_vdne_end 6324299
-#s_ihc_start 6324318
-#s_ihc_end 6324342
-#s_ibc_start 6324378
-#s_ibc_end 6324405
-#s_iuc_start 6324437
-#s_iuc_end 6324462
-#s_iac_start 6324490
-#s_iac_end 6324516
-#s_ise_start 6324579
-#s_ise_end 6324607
-#s_sizilc_start 6324686
-#s_sizilc_end 6324721
-#s_ik_start 6324725
-#s_ik_end 6324721
-#s_ldne_start 6324743
-#s_ldne_end 6324299
-#s_ecind_start 6324751
-#s_ecind_end 6324764
-#s_eool_start 6324783
-#s_eool_end 6324721
-#s_ois_start 6324807
-#s_ois_end 6324721
-#s_ois_TYPE 6324828
-#s_ois_IMPORT 6324833
-#s_ois_FUNCTION 6324840
-#s_ois_MEMORY 6324849
-#s_ois_GLOBAL 6324856
-#s_ois_EXPORT 6324863
-#s_ois_CODE 6324870
-#s_ois_DATA 6324875
-#s_pf 6324880
+#CURRENT_LINE 6422576
+#s_ei_start 6422580
+#s_ei_end 6422588
+#s_vdne_start 6422592
+#s_vdne_end 6422603
+#s_ihc_start 6422622
+#s_ihc_end 6422646
+#s_ibc_start 6422682
+#s_ibc_end 6422709
+#s_iuc_start 6422741
+#s_iuc_end 6422766
+#s_iac_start 6422794
+#s_iac_end 6422820
+#s_ise_start 6422883
+#s_ise_end 6422911
+#s_sizilc_start 6422990
+#s_sizilc_end 6423025
+#s_ik_start 6423029
+#s_ik_end 6423025
+#s_ldne_start 6423047
+#s_ldne_end 6422603
+#s_ecind_start 6423055
+#s_ecind_end 6423068
+#s_eool_start 6423087
+#s_eool_end 6423025
+#s_ois_start 6423111
+#s_ois_end 6423025
+#s_ois_TYPE 6423132
+#s_ois_IMPORT 6423137
+#s_ois_FUNCTION 6423144
+#s_ois_MEMORY 6423153
+#s_ois_GLOBAL 6423160
+#s_ois_EXPORT 6423167
+#s_ois_CODE 6423174
+#s_ois_DATA 6423179
+#s_pf 6423184
 
 
 ; Float diagnostics follow the existing zero-terminated strings.
-#s_ifpn_start 6324895
-#s_ifpn_end 6324927
+#s_ifpn_start 6423199
+#s_ifpn_end 6423231
 
 ; Input region ends where sectionMemory begins.
 #inputLimit 4194304
@@ -203,6 +96,8 @@
 #c14 14
 #c15 15
 #c16 16
+
+#s_cap 6423424
 
 SECTION_HEADER
 SECTION SECTION_TYPE
@@ -322,8 +217,8 @@ SECTION SECTION_FUNCTION
 	#f_writeFloatBits 44 uleb 19
 SECTION_END
 SECTION SECTION_MEMORY
-	; One memory, minimum 97 pages, no declared maximum.
-	uleb 1 uleb 0 uleb 97
+	; One memory, minimum 99 pages, no declared maximum.
+	uleb 1 uleb 0 uleb 99
 SECTION_END
 SECTION SECTION_EXPORT
 	uleb 2
@@ -3206,7 +3101,30 @@ SECTION SECTION_CODE
 			end
 		end
 
-		; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+		; Check both symbol regions before inserting this record.
+        i32.const $symbol_names_stack_index
+        i32.load uleb 2 uleb 0
+        local.get $setVar_name_length
+        i32.add
+        i32.const sleb 3
+        i32.add
+        i32.const sleb 16384
+        i32.gt_u
+        i32.const $symbol_values_stack_index
+        i32.load uleb 2 uleb 0
+        i32.const sleb 2
+        i32.add
+        i32.const sleb 16384
+        i32.gt_u
+        i32.or
+        if NO_RETURN
+            i32.const $s_cap
+            call $f_print_string
+            i32.const sleb 1
+            call $f_exit_program
+        end
+
+        ; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
 		i32.const $symbol_names_stack_index
 		i32.load uleb 2 uleb 0
 		i32.const sleb 2
@@ -3707,7 +3625,30 @@ SECTION SECTION_CODE
 			call $f_error
 		end
 
-		; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+		; Check both symbol regions before inserting this record.
+        i32.const $symbol_names_stack_index
+        i32.load uleb 2 uleb 0
+        local.get $sl_label_length
+        i32.add
+        i32.const sleb 3
+        i32.add
+        i32.const sleb 16384
+        i32.gt_u
+        i32.const $symbol_values_stack_index
+        i32.load uleb 2 uleb 0
+        i32.const sleb 2
+        i32.add
+        i32.const sleb 16384
+        i32.gt_u
+        i32.or
+        if NO_RETURN
+            i32.const $s_cap
+            call $f_print_string
+            i32.const sleb 1
+            call $f_exit_program
+        end
+
+        ; symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
 		i32.const $symbol_names_stack_index
 		i32.load uleb 2 uleb 0
 		i32.const sleb 2
@@ -8208,6 +8149,11 @@ SECTION SECTION_DATA
 	hex 20 str after hex 20 str sign hex 20 str if hex 20 str present, hex 20 str and hex 20 str number
 	hex 20 str must hex 20 str not hex 20 str exceed hex 20 str exponent hex 20 str limit hex 20
 	str (i.e. hex 20 str 1.7976931348623157e+308). hex 0A hex 00
+    ; Symbol-storage capacity diagnostic.
+    COUNT uleb 0
+    i32.const $s_cap end
+    uleb 27
+    hex 53 hex 79 hex 6D hex 62 hex 6F hex 6C hex 20 hex 63 hex 61 hex 70 hex 61 hex 63 hex 69 hex 74 hex 79 hex 20 hex 65 hex 78 hex 63 hex 65 hex 65 hex 64 hex 65 hex 64 hex 2E hex 0A hex 00
 SECTION_END
 
 ; Host handles files, copies source into memory, and calls main().

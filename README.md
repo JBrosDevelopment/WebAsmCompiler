@@ -36,6 +36,7 @@ I will update the README as I progress through the project. Treat this almost as
       - [assembler.0.5 - Adding sleb keyword, adding the DATA section, and optimizing assembler](#assembler05---adding-sleb-keyword-adding-the-data-section-and-optimizing-assembler)
       - [assembler.0.6 - Added Strings to Data Section, Fixed Bug by adding Error Message, and optimized assembler with `sleb`](#assembler06---added-strings-to-data-section-fixed-bug-by-adding-error-message-and-optimized-assembler-with-sleb)
       - [assembler.0.7 - Encoding Floating Points Numbers](#assembler07---encoding-floating-points-numbers)
+      - [assembler.0.8 - Increased Symbol Memory](#assembler08---increased-symbol-memory)
   - [Finalizing the Assembler](#finalizing-the-assembler)
     - [WASI](#wasi)
       - [WASI Hello World Example](#wasi-hello-world-example)
@@ -918,6 +919,12 @@ This update will also add new error messages around encoding floats
 
 This update concludes the assembler.0.x versions, the next step is to start the main versions of the assembler with assembler.1.x.
 
+#### assembler.0.8 - Increased Symbol Memory 
+
+This update just adds more memory for the symbol section of memory having to store `$`, `#`, `^`, and `@` labels/variables.
+
+The size of the section grows from 4,096 to 16,384 slots (64 KiB)
+
 ## Finalizing the Assembler
 
 Right now the assembler requires a javascript host to run the WebAsm binary and supply the imported functions. This is makes sense but there is a better way this could be done, and that is to introduce WASI (Web Assembly System Interface) to this assembler. This will allow the javascript host to not have to worry about supplying the imported function, putting the input file into memory, or outputting the results. This can be done with the `wasi` npm package making a universal host for the assembler. This will also allow the assembler to be run in a terminal without having to use node.js with the `wasmtime`. This will be a huge step forward in making this assembler more user friendly and easier to use.
@@ -1180,3 +1187,7 @@ Program Fault.
 
 This update has a major change in direction for this project by adding WASI so it deserves to be the assembler.1.0 update. \ 
 A few more updates will come before the assembler is in a position to be ready for the compiler to use it. 
+
+---
+
+To be transparent I used Chat GPT to make assembler.1.0.wal based off of assembler.0.7.wal but with the changes implemented in the FullAssembler.py. Because of the scale of assembler.0.7 and the scale of the changes made in this update this seemed like the best use of time so I don't get stuck on this for too long of a time. 
