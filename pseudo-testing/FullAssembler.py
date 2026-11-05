@@ -1,27 +1,6 @@
 import sys
 from pathlib import Path
 
-# soon to add opcode: sqrt
-# soon to add syntax:
-# new import syntax
-#   define_import FUNCTION_KIND $t_f64__void env print_result   -   defines as well: #f_print_result 5
-# new type syntax
-#   define_type FUNCTION f64 f64 -> f64                         -   defines as well: #t_f64_f64__f64 5 
-# new function syntax
-#   define_function $t_f64_f64__f64 pythagorean                 -   defines as well: #f_pythagorean 6
-# new export syntax
-#   define_export FUNCTION_KIND $f_main main
-# new memory syntax
-#   define_memory 0 97
-#   define_import MEMORY_KIND 0 env memory
-# new data syntax
-#   define_data active $destination STRING "Hello World!"
-#   define_data active $destination DATA str Hello hex 20 str World!
-# code syntax
-#   define_code f64 a f64 b ; pythagorean(a, b)
-#   LOCALS f64 c
-#   define_code_end
-
 # Capacities, 4 MiB
 INPUT_LIMIT = 4 * 1024 * 1024 # global
 OUTPUT_LIMIT = 4 * 1024 * 1024 # global
@@ -64,6 +43,7 @@ WRITING_TO_FUNCTION = 0 # global
 LAST_SYMBOL_ID = 0 # global
 CURRENT_SECTION: int = 0 # global
 COUNT: int = 0 # global
+IMPORT_CUNTION_COUNT: int = 0 # global
 
 # All named things use the same two flat stacks. 
 # Names are stored as ID, KIND, STR_LENGTH, STRING_BYTES.
@@ -119,6 +99,15 @@ s_ois_EXPORT = "EXPORT\0"
 s_ois_CODE = "CODE\0"
 s_ois_DATA = "DATA\0"
 s_pf = "Program Fault.\0"
+s_idsuw_start = "Invalid define syntax. Unexpected word `\0"
+s_define_type_end = "`. Valid syntax is 'define_type FUNCTION <parameter1_type> <parameter2_type...> -> <return_type>'\0"
+s_define_import_end = "`. Valid syntax is 'define_import <module> <name> FUNCTION_KIND <type_index>' or 'define_import <module> <name> MEMORY_KIND <memory_index>'\0"
+s_define_function_end = "`. Valid syntax is 'define_function <type_index> <name>'\0"
+s_define_export_end = "`. Valid syntax is 'define_export FUNCTION_KIND <function_index> <name>'\0"
+s_define_memory_end = "`. Valid syntax is 'define_memory <max> <min>'\0"
+s_define_data_end = "`. Valid syntax is 'define_data <active/passive> <destination_address> STRING \"<text>\"' or 'define_data <active/passive> <destination_address> DATA <bytes>\0"
+s_define_code_end = "`. Valid syntax is 'define_code <parameter1_type> <parameter1_name> <parameters...>'\0"
+s_define_locals_end = "`. Valid syntax is 'define_locals <local1_type> <local1_name> <locals...>'\0"
 
 # runtime error strings
 s_output_limit = "Generated binary exceeds the output buffer capacity\0"
@@ -388,6 +377,9 @@ def equals13(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c
 def equals14(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and isWhiteSpace(index + 14)
 
+def equals15(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int, c15: int) -> int:
+    return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and memory[index + 14] == c15 and isWhiteSpace(index + 15)
+
 def equals16(index: int, c1: int, c2: int, c3: int, c4: int, c5: int, c6: int, c7: int, c8: int, c9: int, c10: int, c11: int, c12: int, c13: int, c14: int, c15: int, c16: int) -> int:
     return memory[index] == c1 and memory[index + 1] == c2 and memory[index + 2] == c3 and memory[index + 3] == c4 and memory[index + 4] == c5 and memory[index + 5] == c6 and memory[index + 6] == c7 and memory[index + 7] == c8 and memory[index + 8] == c9 and memory[index + 9] == c10 and memory[index + 10] == c11 and memory[index + 11] == c12 and memory[index + 12] == c13 and memory[index + 13] == c14 and memory[index + 14] == c15 and memory[index + 15] == c16 and isWhiteSpace(index + 16)
 
@@ -446,7 +438,55 @@ def error(index, value):
         print_string(s_ifpn_start)
         print_char(memory[index_pointer])
         print_string(s_ifpn_end)
-    if value > 0x0A or value < 0x01:
+    if value == 0x0B:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_type_end)
+    if value == 0x0C:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_import_end)
+    if value == 0x0D:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_function_end)
+    if value == 0x0E:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_export_end)
+    if value == 0x0F:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_memory_end)
+    if value == 0x10:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_data_end)
+    if value == 0x11:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_code_end)
+    if value == 0x12:
+        print_string(s_idsuw_start)
+        while not isWhiteSpace(index_pointer):
+            print_char(memory[index_pointer])
+            index_pointer += 1
+        print_string(s_define_locals_end)
+    if value > 0x12 or value < 0x01:
         print_i32(value)
         print_string(s_ecind_end)
 
@@ -983,6 +1023,223 @@ def getLabel(index: int) -> int:
 
     error(label_start, 0x05)
 
+def handle_defines_type(index: int) -> int:
+    global COUNT
+    # define_type FUNCTION f64 f64 -> f64
+    # 0x60 0x01 0x7C 0x01 0x7C
+    # defines variable: #t_f64__f64 0
+    index = skipWhiteSpace(index + 11)
+
+    if equals8(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
+        index += 8
+        writeSectionChar(0x01)
+    else:
+        error(index, 0x0B)
+
+    parameter_count = 0
+    index_temp = index
+    while True:
+        index_temp = skipWhiteSpace(index_temp)
+        parameter_count += 1
+
+        if equals2(index_temp, ord('-'), ord('>')):
+            break
+    
+    writeSectionChar(parameter_count)
+
+    # add variable name to symbol table
+    variable_name_length = (parameter_count + 1) * 4 # type has 4 bytes (3 for type 1 for underscore), parameter `(i32_)` + return type `_i32`
+    add_variable_properties_from_defines(variable_name_length)
+
+    found_arrow = 0
+    while True:
+        if found_arrow != 2:
+            index = skipWhiteSpace(index)
+
+        if equals3(index, ord('i'), ord('3'), ord('2')):
+            writeSectionChar(0x7F)
+            index += 3
+        elif equals3(index, ord('i'), ord('6'), ord('4')):
+            writeSectionChar(0x7E)
+            index += 3
+        elif equals3(index, ord('f'), ord('3'), ord('2')):
+            writeSectionChar(0x7D)
+            index += 3
+        elif equals3(index, ord('f'), ord('6'), ord('4')):
+            writeSectionChar(0x7C)
+            index += 3
+        elif equals2(index, ord('-'), ord('>')):
+            found_arrow = -1
+            writeSectionChar(0x01)
+            index += 2
+        elif found_arrow == 2:
+            symbol_names[symbol_names_stack_index + 3] = ord('_')
+            symbol_names[symbol_names_stack_index] = memory[index]
+            symbol_names[symbol_names_stack_index + 1] = memory[index + 1]
+            symbol_names[symbol_names_stack_index + 2] = memory[index + 2]
+            symbol_names_stack_index += 4
+            break
+        else:
+            error(index, 0x0B)
+        
+        if found_arrow == -1:
+            found_arrow = 1
+        elif found_arrow != 0:
+            found_arrow += 1
+
+        if found_arrow == 0:
+            symbol_names[symbol_names_stack_index] = memory[index]
+            symbol_names[symbol_names_stack_index + 1] = memory[index + 1]
+            symbol_names[symbol_names_stack_index + 2] = memory[index + 2]
+            symbol_names[symbol_names_stack_index + 3] = ord('_')
+            symbol_names_stack_index += 4
+
+    add_variable_value_from_defines(COUNT)
+
+    COUNT += 1
+    return index
+
+def handle_defines_import(index: int) -> int:
+    global COUNT
+    # define_import env memory MEMORY_KIND 0 
+    # define_import env print_f64 FUNCTION_KIND $t_f64__void
+    # defines variable #f_env_print_f64 0
+    index += skipWhiteSpace(index + 14)
+    is_function = 0
+
+    if equals13(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
+        writeSectionChar(0x00)
+        index += 13
+        is_function = 1
+    elif equals11(index, ord('M'), ord('E'), ord('M'), ord('O'), ord('R'), ord('Y'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
+        writeSectionChar(0x02)
+        index += 11
+    else:
+        error(index, 0x0C)
+    
+    index = skipWhiteSpace(index)
+
+    if memory[index] == ord('$'):
+        getVariable(index + 1)
+    else:
+        writeFromUleb(index)
+    
+    module_start = 0
+    module_length = 0
+    name_start = 0
+    name_length = 0
+    
+    twice = 0 # once for <module_name> and once for <function_name/import_name>
+    while twice < 2:
+        twice += 1
+
+        index = skipWhiteSpace(index)
+
+        if twice == 1:
+            module_start = index
+        else:
+            name_start = index
+
+        length = 0
+        while memory[index + length] != 0 and not isWhiteSpace(index + length):
+            length += 1
+        
+        if length == 0:
+            error(index, 0x0C)
+        
+        writeSectionChar(length)
+        
+        while index < index + length:
+            writeSectionChar(memory[index])
+            index += 1
+        
+        if twice == 1:
+            module_length = length
+        else:
+            name_length = length
+
+    if is_function:
+        add_variable_properties_from_defines(length)
+        symbol_names[symbol_names_stack_index] = ord('f')
+        symbol_names[symbol_names_stack_index + 1] = ord('_')
+        symbol_names_stack_index += 2
+        while module_start < module_length:
+            symbol_names[symbol_names_stack_index] = memory[module_start]
+            symbol_names_stack_index += 1
+            module_start += 1
+        symbol_names[symbol_names_stack_index + 1] = ord('_')
+        symbol_names_stack_index += 1
+        while name_start < name_length:
+            symbol_names[symbol_names_stack_index] = memory[name_start]
+            symbol_names_stack_index += 1
+            name_start += 1
+        add_variable_value_from_defines(COUNT)
+
+    COUNT += 1
+    return index
+
+def handle_defines_function(index: int) -> int:
+    global COUNT
+    # define_function $t_f64_f64__f64 pythagorean
+    # 0x00 ; index
+    # defines variable #f_pythagorean 1
+    
+    COUNT += 1
+    return index
+
+def handle_defines_export(index: int) -> int:
+    global COUNT
+    # define_export FUNCTION_KIND $f_main main
+    
+    COUNT += 1
+    return index
+
+def handle_defines_memory(index: int) -> int:
+    global COUNT
+    # define_memory 0 97
+    
+    COUNT += 1
+    return index
+
+def handle_defines_data(index: int) -> int:
+    global COUNT
+    # define_data active $destination STRING "Hello World!"
+    # define_data active $destination DATA str Hello hex 20 str World!
+    
+    COUNT += 1
+    return index
+
+def handle_defines_code(index: int) -> int:
+    global COUNT
+    # define_code f64 a f64 b ; pythagorean(a, b)
+    
+    COUNT += 1
+    return index
+
+def handle_defines_locals(index: int) -> int:
+    # define_locals f32 a i32 b
+    pass
+
+def add_variable_properties_from_defines(variable_name_length: int) -> None:
+    symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
+    symbol_names_stack_index += 1
+
+    symbol_names[symbol_names_stack_index] = SYMBOL_VARIABLE
+    symbol_names_stack_index += 1
+
+    symbol_names[symbol_names_stack_index] = variable_name_length
+    symbol_names_stack_index += 1
+
+def add_variable_value_from_defines(value: int) -> None:
+    global LAST_SYMBOL_ID
+    symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
+    symbol_values_stack_index += 1
+
+    symbol_values[symbol_values_stack_index] = value
+    symbol_values_stack_index += 1
+
+    LAST_SYMBOL_ID += 1
+
 def parseCmd(index: int) -> int:
     global LABEL_SCOPE
     i32_arithmatic = 0x6A
@@ -1355,6 +1612,22 @@ def parseWord(index: int) -> int:
     if equals5(index, ord('C'), ord('O'), ord('U'), ord('N'), ord('T')):
         COUNT += 1
         return index + 5
+    if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('t'), ord('y'), ord('p')):
+        return handle_defines_type(index)
+    if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('i'), ord('m'), ord('p'), ord('o'), ord('r'), ord('t')):
+        return handle_defines_import(index)
+    if equals15(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('f'), ord('u'), ord('n'), ord('c'), ord('t'), ord('i'), ord('o'), ord('n')):
+        return handle_defines_function(index)    
+    if equals14(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('e'), ord('x'), ord('p'), ord('o'), ord('r'), ord('t')):
+        return handle_defines_export(index)
+    if equals14(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('m'), ord('e'), ord('m'), ord('o'), ord('r'), ord('y')):
+        return handle_defines_memory(index)
+    if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('d'), ord('a'), ord('t'), ord('a')):
+        return handle_defines_data(index)
+    if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('c'), ord('o'), ord('d'), ord('e')):
+        return handle_defines_code(index)
+    if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('s')):
+        return handle_defines_locals(index)
     if isComment(index):
         return skipComment(index)
     if memory[index] == ord('#'):
