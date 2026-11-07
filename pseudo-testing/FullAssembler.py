@@ -43,7 +43,12 @@ WRITING_TO_FUNCTION = 0 # global
 LAST_SYMBOL_ID = 0 # global
 CURRENT_SECTION: int = 0 # global
 COUNT: int = 0 # global
-IMPORT_CUNTION_COUNT: int = 0 # global
+IMPORT_FUNCTION_COUNT: int = 0 # global
+IMPORT_MEMORY_COUNT: int = 0 # global
+LOCAL_VARIABLE_COUNT: int = 0 # global
+FUNCTION_SYMBOL_NAMES_START: int = 0 # global
+FUNCTION_SYMBOL_VALUES_START: int = 0 # global
+FUNCTION_SYMBOL_ID_START: int = 0 # global
 
 # All named things use the same two flat stacks. 
 # Names are stored as ID, KIND, STR_LENGTH, STRING_BYTES.
@@ -98,16 +103,17 @@ s_ois_MEMORY = "MEMORY\0"
 s_ois_EXPORT = "EXPORT\0"
 s_ois_CODE = "CODE\0"
 s_ois_DATA = "DATA\0"
+s_ois_CUSTOM = "CUSTOM\0"
 s_pf = "Program Fault.\0"
 s_idsuw_start = "Invalid define syntax. Unexpected word `\0"
-s_define_type_end = "`. Valid syntax is 'define_type FUNCTION <parameter1_type> <parameter2_type...> -> <return_type>'\0"
-s_define_import_end = "`. Valid syntax is 'define_import <module> <name> FUNCTION_KIND <type_index>' or 'define_import <module> <name> MEMORY_KIND <memory_index>'\0"
-s_define_function_end = "`. Valid syntax is 'define_function <type_index> <name>'\0"
-s_define_export_end = "`. Valid syntax is 'define_export FUNCTION_KIND <function_index> <name>'\0"
-s_define_memory_end = "`. Valid syntax is 'define_memory <max> <min>'\0"
-s_define_data_end = "`. Valid syntax is 'define_data <active/passive> <destination_address> STRING \"<text>\"' or 'define_data <active/passive> <destination_address> DATA <bytes>\0"
-s_define_code_end = "`. Valid syntax is 'define_code <parameter1_type> <parameter1_name> <parameters...>'\0"
-s_define_locals_end = "`. Valid syntax is 'define_locals <local1_type> <local1_name> <locals...>'\0"
+s_define_type_end = "`. Valid syntax is 'define_type FUNCTION <parameter1_type> <parameter2_type...> -> <return_type>'. Additionally can not have void as parameter type unless it is the only parameter. Void is a valid return type.\n\0"
+s_define_import_end = "`. Valid syntax is 'define_import <module> <name> FUNCTION_KIND <type_index>' or 'define_import <module> <name> MEMORY_KIND <flags> <min> [<max>]'. Memory flags: 0 = minimum only, 1 = minimum and maximum; sizes are in 64 KiB pages.\n\0"
+s_define_function_end = "`. Valid syntax is 'define_function <type_index> <name>'\n\0"
+s_define_export_end = "`. Valid syntax is 'define_export FUNCTION_KIND <function_index> <name>'\n\0"
+s_define_memory_end = "`. Valid syntax is 'define_memory <flags> <min> [<max>] <name>'. Flags: 0 = minimum only, 1 = minimum and maximum; sizes are in 64 KiB pages, with 0 <= min <= max <= 65536.\n\0"
+s_define_data_end = "`. Valid syntax is 'define_data <active/passive> <destination_address> <STRING/STRING_NT> \"<text>\"' or 'define_data <active/passive> <destination_address> DATA <length> <bytes>\n\0"
+s_define_code_end = "`. Valid syntax is 'define_code <parameter1_type> <parameter1_name> <parameters...>' or 'define_code none' AND expected next keyword to be 'define_locals'\n\0"
+s_define_locals_end = "`. Valid syntax is 'define_locals <local1_type> <local1_name> <locals...>' or 'define_locals none'\n\0"
 
 # runtime error strings
 s_output_limit = "Generated binary exceeds the output buffer capacity\0"
@@ -491,6 +497,8 @@ def error(index, value):
         print_string(s_ecind_end)
 
     print_string(s_ois_start)
+    if CURRENT_SECTION == 0x00:
+        print_string(s_ois_CUSTOM)
     if CURRENT_SECTION == 0x01:
         print_string(s_ois_TYPE)
     if CURRENT_SECTION == 0x02:
@@ -822,7 +830,6 @@ def check_symbol_capacity(name_length: int):
     if symbol_values_stack_index + 2 > len(symbol_values):
         runtime_error(s_symbol_values_capacity)
 
-
 def setVariable(index: int) -> int:
     global LAST_SYMBOL_ID
     global symbol_names_stack_index
@@ -837,7 +844,7 @@ def setVariable(index: int) -> int:
         variable_name_length += 1
     index += variable_name_length
 
-    index = skipWhiteSpace(index) # move past whitespace to digit
+    index = skipWhiteSpace(index)
 
     # Get value
     while True:
@@ -848,9 +855,40 @@ def setVariable(index: int) -> int:
         if isWhiteSpace(index):
             break
 
+    # Check if variable already exists
+    name_index = 0
+
+    while name_index < symbol_names_stack_index:
+        symbol_id = symbol_names[name_index]
+        symbol_kind = symbol_names[name_index + 1]
+        name_length = symbol_names[name_index + 2]
+
+        if symbol_kind == SYMBOL_VARIABLE and name_length == variable_name_length:
+            matches = True
+
+            for i in range(variable_name_length):
+                if symbol_names[name_index + 3 + i] != memory[variable_name_start + i]:
+                    matches = False
+                    break
+
+            if matches:
+                # Find existing value by symbol ID
+                value_index = 0
+
+                while value_index < symbol_values_stack_index:
+                    if symbol_values[value_index] == symbol_id:
+                        symbol_values[value_index + 1] = result
+                        return index
+
+                    value_index += 2
+
+        # Move to next symbol
+        name_index += 3 + name_length
+
+    # Variable does not exist; create it
     check_symbol_capacity(variable_name_length)
 
-    # Store variable name:
+    # Store variable name
     symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
     symbol_names_stack_index += 1
 
@@ -862,11 +900,10 @@ def setVariable(index: int) -> int:
 
     while loop_index < variable_name_length:
         symbol_names[symbol_names_stack_index] = memory[variable_name_start + loop_index]
-
         symbol_names_stack_index += 1
         loop_index += 1
 
-    # Store variable value:
+    # Store variable value
     symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
     symbol_values_stack_index += 1
 
@@ -877,7 +914,7 @@ def setVariable(index: int) -> int:
 
     return index
 
-def getVariable(index: int) -> int:
+def getVariable(index: int, signed_bits: int = 0) -> int:
     variable_name_start = index
     variable_name_length = 0
     vname_pointer = 0
@@ -924,7 +961,15 @@ def getVariable(index: int) -> int:
                 if symbol_values[value_pointer] == variable_id:
                     value = symbol_values[value_pointer + 1]
 
-                    writeByte(value)
+                    if signed_bits:
+                        if value < -(1 << (signed_bits - 1)) or value >= (1 << signed_bits):
+                            error(variable_name_start, 0x04)
+                        # Accept the unsigned spelling of an integer bit pattern.
+                        if value >= (1 << (signed_bits - 1)):
+                            value -= 1 << signed_bits
+                        writeSignedByte(value)
+                    else:
+                        writeByte(value)
                     return index
 
                 value_pointer += 2
@@ -1024,7 +1069,7 @@ def getLabel(index: int) -> int:
     error(label_start, 0x05)
 
 def handle_defines_type(index: int) -> int:
-    global COUNT
+    global COUNT, symbol_names_stack_index, symbol_names
     # define_type FUNCTION f64 f64 -> f64
     # 0x60 0x01 0x7C 0x01 0x7C
     # defines variable: #t_f64__f64 0
@@ -1032,29 +1077,72 @@ def handle_defines_type(index: int) -> int:
 
     if equals8(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         index += 8
-        writeSectionChar(0x01)
+        writeSectionChar(0x60)
     else:
         error(index, 0x0B)
 
+    void_return_type = 0
+    void_parameter = 0
     parameter_count = 0
+    arrow_occured = 0
     index_temp = index
+    arrow_index = 0
     while True:
         index_temp = skipWhiteSpace(index_temp)
-        parameter_count += 1
-
         if equals2(index_temp, ord('-'), ord('>')):
+            arrow_index = index_temp
+            arrow_occured = 1
+        elif equals4(index_temp, ord('v'), ord('o'), ord('i'), ord('d')):
+            if arrow_occured != 0:
+                void_return_type = 1
+            else:
+                void_parameter += 1
+        while not isWhiteSpace(index_temp):
+            index_temp += 1
+
+        if arrow_occured == 0:
+            parameter_count += 1
+        else:
+            arrow_occured += 1
+        
+        if arrow_occured == 3:
             break
-    
-    writeSectionChar(parameter_count)
+
+        if index_temp - index > 100:
+            error(index, 0x0B)
+
+    if void_parameter > 1 or (parameter_count != void_parameter and void_parameter > 0):
+        error(index, 0x0B)
 
     # add variable name to symbol table
-    variable_name_length = (parameter_count + 1) * 4 # type has 4 bytes (3 for type 1 for underscore), parameter `(i32_)` + return type `_i32`
+    variable_name_length = ((parameter_count + 1) * 4) + 2 # type has 4 bytes (3 for type 1 for underscore), parameter `(i32_)` + return type `_i32`, `t_` has 2 bytes
+    if void_return_type == 1: # void is 4 bytes long
+        variable_name_length += 1
+    if void_parameter == 1: # void is 4 bytes long
+        variable_name_length += 1
+
     add_variable_properties_from_defines(variable_name_length)
+
+    symbol_names[symbol_names_stack_index] = ord('t')
+    symbol_names[symbol_names_stack_index + 1] = ord('_')
+    symbol_names_stack_index += 2
+
+    if void_parameter == 1:
+        writeSectionChar(0x00) # write no parameters
+        index = arrow_index # start at the arrow
+        symbol_names[symbol_names_stack_index] = ord('v')
+        symbol_names[symbol_names_stack_index + 1] = ord('o')
+        symbol_names[symbol_names_stack_index + 2] = ord('i')
+        symbol_names[symbol_names_stack_index + 3] = ord('d')
+        symbol_names[symbol_names_stack_index + 4] = ord('_')
+        symbol_names_stack_index += 5
+    else:
+        writeSectionChar(parameter_count)
 
     found_arrow = 0
     while True:
-        if found_arrow != 2:
-            index = skipWhiteSpace(index)
+        index = skipWhiteSpace(index)
+        type_start = index
 
         if equals3(index, ord('i'), ord('3'), ord('2')):
             writeSectionChar(0x7F)
@@ -1070,17 +1158,30 @@ def handle_defines_type(index: int) -> int:
             index += 3
         elif equals2(index, ord('-'), ord('>')):
             found_arrow = -1
+            if void_return_type == 1:
+                index += 2 # skip arrow
+                index = skipWhiteSpace(index)
+                index += 4 # skip void
+                writeSectionChar(0x00)
+                symbol_names[symbol_names_stack_index] = ord('_')
+                symbol_names[symbol_names_stack_index + 1] = ord('v')
+                symbol_names[symbol_names_stack_index + 2] = ord('o')
+                symbol_names[symbol_names_stack_index + 3] = ord('i')
+                symbol_names[symbol_names_stack_index + 4] = ord('d')
+                symbol_names_stack_index += 5
+                break
             writeSectionChar(0x01)
             index += 2
-        elif found_arrow == 2:
-            symbol_names[symbol_names_stack_index + 3] = ord('_')
-            symbol_names[symbol_names_stack_index] = memory[index]
-            symbol_names[symbol_names_stack_index + 1] = memory[index + 1]
-            symbol_names[symbol_names_stack_index + 2] = memory[index + 2]
-            symbol_names_stack_index += 4
-            break
         else:
             error(index, 0x0B)
+        
+        if found_arrow == 1:
+            symbol_names[symbol_names_stack_index] = ord('_')
+            symbol_names[symbol_names_stack_index + 1] = memory[type_start]
+            symbol_names[symbol_names_stack_index + 2] = memory[type_start + 1]
+            symbol_names[symbol_names_stack_index + 3] = memory[type_start + 2]
+            symbol_names_stack_index += 4
+            break
         
         if found_arrow == -1:
             found_arrow = 1
@@ -1088,9 +1189,9 @@ def handle_defines_type(index: int) -> int:
             found_arrow += 1
 
         if found_arrow == 0:
-            symbol_names[symbol_names_stack_index] = memory[index]
-            symbol_names[symbol_names_stack_index + 1] = memory[index + 1]
-            symbol_names[symbol_names_stack_index + 2] = memory[index + 2]
+            symbol_names[symbol_names_stack_index] = memory[type_start]
+            symbol_names[symbol_names_stack_index + 1] = memory[type_start + 1]
+            symbol_names[symbol_names_stack_index + 2] = memory[type_start + 2]
             symbol_names[symbol_names_stack_index + 3] = ord('_')
             symbol_names_stack_index += 4
 
@@ -1099,14 +1200,86 @@ def handle_defines_type(index: int) -> int:
     COUNT += 1
     return index
 
+def write_memory_limits(index: int, error_code: int) -> int:
+    # Both imported and locally defined memories contain inline limits.
+    # Only ordinary, unshared 32-bit memories (flags 0 and 1) are supported.
+    flags = 0
+    minimum = 0
+    field = 0
+    while field < 2 + flags:
+        index = skipWhiteSpace(index)
+        start = index
+        # Reuse the existing unsigned-number/symbol encoders, then read the
+        # emitted ULEB value to validate the flags and page bounds.
+        output_start = SECTION_BYTES_OUT
+        if memory[index] == ord('$'):
+            index = getVariable(index + 1)
+        else:
+            index = writeFromUleb(index)
+        value = 0
+        shift = 0
+        position = output_start
+        while position < SECTION_BYTES_OUT:
+            value |= (sectionMemory[position] & 0x7F) << shift
+            shift += 7
+            position += 1
+        if field == 0:
+            if value != 0 and value != 1:
+                error(start, error_code)
+            flags = value
+        elif field == 1:
+            if value > 65536:
+                error(start, error_code)
+            minimum = value
+        elif value < minimum or value > 65536:
+            error(start, error_code)
+        field += 1
+    return index
+
+
 def handle_defines_import(index: int) -> int:
-    global COUNT
-    # define_import env memory MEMORY_KIND 0 
+    global COUNT, IMPORT_FUNCTION_COUNT, IMPORT_MEMORY_COUNT, symbol_names_stack_index, symbol_names
+    # define_import env memory MEMORY_KIND 0 1
+    # define_import env memory MEMORY_KIND 1 1 10
     # define_import env print_f64 FUNCTION_KIND $t_f64__void
     # defines variable #f_env_print_f64 0
-    index += skipWhiteSpace(index + 14)
+    index = skipWhiteSpace(index + 14)
+    
     is_function = 0
+    module_start = 0
+    module_end = 0
+    name_start = 0
+    name_end = 0
+    
+    twice = 0 # once for <module_name> and once for <function_name/import_name>
+    while twice < 2:
+        twice += 1
 
+        if twice == 1:
+            module_start = index
+        else:
+            name_start = index
+
+        end = index
+        while memory[end] != 0 and not isWhiteSpace(end):
+            end += 1
+        
+        if end - index == 0:
+            error(index, 0x0C)
+        
+        writeSectionChar(end - index)
+        
+        while index < end:
+            writeSectionChar(memory[index])
+            index += 1
+        
+        if twice == 1:
+            module_end = end
+        else:
+            name_end = end
+
+        index = skipWhiteSpace(index)
+            
     if equals13(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
         writeSectionChar(0x00)
         index += 13
@@ -1119,84 +1292,146 @@ def handle_defines_import(index: int) -> int:
     
     index = skipWhiteSpace(index)
 
-    if memory[index] == ord('$'):
-        getVariable(index + 1)
+    if not is_function:
+        index = write_memory_limits(index, 0x0C)
+    elif memory[index] == ord('$'):
+        index = getVariable(index + 1)
     else:
-        writeFromUleb(index)
+        index = writeFromUleb(index)
+
+    add_variable_properties_from_defines(3 + module_end - module_start + name_end - name_start)
     
-    module_start = 0
-    module_length = 0
-    name_start = 0
-    name_length = 0
-    
-    twice = 0 # once for <module_name> and once for <function_name/import_name>
-    while twice < 2:
-        twice += 1
-
-        index = skipWhiteSpace(index)
-
-        if twice == 1:
-            module_start = index
-        else:
-            name_start = index
-
-        length = 0
-        while memory[index + length] != 0 and not isWhiteSpace(index + length):
-            length += 1
-        
-        if length == 0:
-            error(index, 0x0C)
-        
-        writeSectionChar(length)
-        
-        while index < index + length:
-            writeSectionChar(memory[index])
-            index += 1
-        
-        if twice == 1:
-            module_length = length
-        else:
-            name_length = length
-
-    if is_function:
-        add_variable_properties_from_defines(length)
+    if is_function: 
         symbol_names[symbol_names_stack_index] = ord('f')
-        symbol_names[symbol_names_stack_index + 1] = ord('_')
-        symbol_names_stack_index += 2
-        while module_start < module_length:
-            symbol_names[symbol_names_stack_index] = memory[module_start]
-            symbol_names_stack_index += 1
-            module_start += 1
-        symbol_names[symbol_names_stack_index + 1] = ord('_')
+    else: 
+        symbol_names[symbol_names_stack_index] = ord('m')
+    
+    symbol_names[symbol_names_stack_index + 1] = ord('_')
+    symbol_names_stack_index += 2
+    while module_start < module_end:
+        symbol_names[symbol_names_stack_index] = memory[module_start]
         symbol_names_stack_index += 1
-        while name_start < name_length:
-            symbol_names[symbol_names_stack_index] = memory[name_start]
-            symbol_names_stack_index += 1
-            name_start += 1
-        add_variable_value_from_defines(COUNT)
+        module_start += 1
+    symbol_names[symbol_names_stack_index] = ord('_')
+    symbol_names_stack_index += 1
+    while name_start < name_end:
+        symbol_names[symbol_names_stack_index] = memory[name_start]
+        symbol_names_stack_index += 1
+        name_start += 1
+    add_variable_value_from_defines(IMPORT_FUNCTION_COUNT if is_function else IMPORT_MEMORY_COUNT)
+
+    if is_function: 
+        IMPORT_FUNCTION_COUNT += 1
+    else: 
+        IMPORT_MEMORY_COUNT += 1
 
     COUNT += 1
     return index
 
 def handle_defines_function(index: int) -> int:
-    global COUNT
+    global COUNT, symbol_names_stack_index, symbol_names
     # define_function $t_f64_f64__f64 pythagorean
-    # 0x00 ; index
+    # 0x01 ; index
     # defines variable #f_pythagorean 1
+
+    index = skipWhiteSpace(index + 15)
+
+    if memory[index] == ord('$'):
+        index = index = getVariable(index + 1)
+    else:
+        index = index = writeFromUleb(index)
+    
+    index = skipWhiteSpace(index)
+
+    name_start = index
+    while not isWhiteSpace(index):
+        index += 1
+    name_length = index - name_start
+
+    if name_length == 0:
+        error(index, 0x0D)
+
+    add_variable_properties_from_defines(name_length + 2)
+
+    symbol_names[symbol_names_stack_index] = ord('f')
+    symbol_names[symbol_names_stack_index + 1] = ord('_')
+    symbol_names_stack_index += 2
+
+    add_variable_properties_name_from_defines(index, name_start) # the rest of the name after the `f_`
+    add_variable_value_from_defines(IMPORT_FUNCTION_COUNT + COUNT)
     
     COUNT += 1
     return index
 
 def handle_defines_export(index: int) -> int:
     global COUNT
-    # define_export FUNCTION_KIND $f_main main
+    # define_export main FUNCTION_KIND $f_main
+    index = skipWhiteSpace(index + 14)
+
+    length = 0
+    while memory[index + length] != 0 and not isWhiteSpace(index + length):
+        length += 1
+    
+    if length == 0:
+        error(index, 0x0E)
+    
+    writeSectionChar(length)
+    
+    start = index
+    while index < start + length:
+        writeSectionChar(memory[index])
+        index += 1
+    
+    index = skipWhiteSpace(index)
+
+    if equals13(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
+        writeSectionChar(0x00)
+        index += 13
+    elif equals11(index, ord('M'), ord('E'), ord('M'), ord('O'), ord('R'), ord('Y'), ord('_'), ord('K'), ord('I'), ord('N'), ord('D')):
+        writeSectionChar(0x02)
+        index += 11
+    else:
+        error(index, 0x0E)
+    
+    index = skipWhiteSpace(index)
+
+    if memory[index] == ord('$'):
+        index = getVariable(index + 1)
+    else:
+        index = writeFromUleb(index)
     
     COUNT += 1
     return index
 
 def handle_defines_memory(index: int) -> int:
-    global COUNT
-    # define_memory 0 97
+    global COUNT, symbol_names_stack_index, symbol_names
+    # define_memory 0 97 section_memory
+    # define_memory 1 1 10 section_memory (minimum 1, maximum 10 pages)
+    # defines memory index #m_section_memory, after all imported memories
+    # 0x00 0x61
+
+    index = skipWhiteSpace(index + 14)
+
+    index = write_memory_limits(index, 0x0F)
+    
+    index = skipWhiteSpace(index)
+
+    name_start = index
+    while not isWhiteSpace(index):
+        index += 1
+    name_length = index - name_start
+
+    if name_length == 0:
+        error(index, 0x0F)
+
+    add_variable_properties_from_defines(name_length + 2)
+
+    symbol_names[symbol_names_stack_index] = ord('m')
+    symbol_names[symbol_names_stack_index + 1] = ord('_')
+    symbol_names_stack_index += 2
+
+    add_variable_properties_name_from_defines(index, name_start) # the rest of the name after the `m_`
+    add_variable_value_from_defines(IMPORT_MEMORY_COUNT + COUNT)
     
     COUNT += 1
     return index
@@ -1204,23 +1439,208 @@ def handle_defines_memory(index: int) -> int:
 def handle_defines_data(index: int) -> int:
     global COUNT
     # define_data active $destination STRING "Hello World!"
-    # define_data active $destination DATA str Hello hex 20 str World!
+    # define_data active $destination STRING_NT "Hello World!"
+    # define_data active $destination DATA 13 str Hello hex 20 str World! hex 00
+    # as WAL
+    # uleb 0 i32.const $destination end uleb 12 str Hello hex 20 World! hex 00
+    # as bytes
+    # 0x00 0x41 0x?? 0x0B 0x0B 0x48 0x65 0x6C 0x6C 0x6F 0x20 0x57 0x6F 0x72 0x6C 0x64 0x21 0x00
+
+    index = skipWhiteSpace(index + 11)
+
+    if equals6(index, ord('a'), ord('c'), ord('t'), ord('i'), ord('v'), ord('e')):
+        writeSectionChar(0x00)
+        index += 6
+    elif equals7(index, ord('p'), ord('a'), ord('s'), ord('s'), ord('i'), ord('v'), ord('e')):
+        writeSectionChar(0x01)
+        index += 7
+    else:
+        error(index, 0x10)
+
+    index = skipWhiteSpace(index)
+
+    writeSectionChar(0x41)
+
+    if memory[index] == ord('$'):
+        index = getVariable(index + 1)
+    else:
+        index = writeFromUleb(index)
+
+    index = skipWhiteSpace(index)
+
+    writeSectionChar(0x0B)
+    null_terminated = 0
+
+    if equals6(index, ord('S'), ord('T'), ord('R'), ord('I'), ord('N'), ord('G')):
+        null_terminated = 0
+        index += 6
+    elif equals9(index, ord('S'), ord('T'), ord('R'), ord('I'), ord('N'), ord('G'), ord('_'), ord('N'), ord('T')):
+        null_terminated = 1
+        index += 9
+    elif equals4(index, ord('D'), ord('A'), ord('T'), ord('A')):
+        index += 4
+        index = skipWhiteSpace(index)
+        if memory[index] == ord('$'):
+            index = getVariable(index + 1)
+        else:
+            index = writeFromUleb(index)
+        COUNT += 1
+        return index # the data load is handled in parseWord and no need to handle it here 
+    else:
+        error(index, 0x10)
+
+    index = skipWhiteSpace(index)
+
+    if memory[index] != ord('"'):
+        error(index, 0x10)
+
+    index += 1
+
+    start = index
+    end = index
+    while memory[end] != ord('"') and memory[end] != 0:
+        end += 1
+        if end - start > 100:
+            print(index, memory[index])
+            error(index, 0x10)
+
+    writeSectionChar(end - start + (1 if null_terminated == 1 else 0))
+
+    while index < end:
+        writeSectionChar(memory[index])
+        index += 1
     
+    index += 1 # skip the `"`
+
+    if null_terminated == 1:
+        writeSectionChar(0x00)
+
     COUNT += 1
     return index
 
 def handle_defines_code(index: int) -> int:
-    global COUNT
-    # define_code f64 a f64 b ; pythagorean(a, b)
-    
+    global COUNT, WRITING_TO_FUNCTION, LABEL_SCOPE, LABEL_FIRST_SYMBOL_ID, FUNCTION_LAST_BYTES_OUT, LOCAL_VARIABLE_COUNT, FUNCTION_SYMBOL_NAMES_START, FUNCTION_SYMBOL_VALUES_START, FUNCTION_SYMBOL_ID_START
+    # define_code f64 a f64 b
+    # define variables: #a 0 #b 1
+
+    index = skipWhiteSpace(index + 11)
+
+    FUNCTION_SYMBOL_NAMES_START = symbol_names_stack_index
+    FUNCTION_SYMBOL_VALUES_START = symbol_values_stack_index
+    FUNCTION_SYMBOL_ID_START = LAST_SYMBOL_ID
+
+    FUNCTION_LAST_BYTES_OUT = FUNCTION_BYTES_OUT
+    WRITING_TO_FUNCTION = 1
+    LABEL_SCOPE = 0
+    LABEL_FIRST_SYMBOL_ID = LAST_SYMBOL_ID
     COUNT += 1
+    LOCAL_VARIABLE_COUNT = 0
+
+    if equals4(index, ord('n'), ord('o'), ord('n'), ord('e')):
+        return index + 4
+    
+    while memory[index] != 0:
+        index = skipWhiteSpace(index)
+
+        if equals3(index, ord('i'), ord('3'), ord('2')):
+            index = skipWhiteSpace(index + 3)
+        elif equals3(index, ord('f'), ord('3'), ord('2')):
+            index = skipWhiteSpace(index + 3)
+        elif equals3(index, ord('i'), ord('6'), ord('4')):
+            index = skipWhiteSpace(index + 3)
+        elif equals3(index, ord('f'), ord('6'), ord('4')):
+            index = skipWhiteSpace(index + 3)
+        elif equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('s')):
+            return index
+        else:
+            error(index, 0x11)
+
+        name_start = index
+        while not isWhiteSpace(index):
+            index += 1
+        name_length = index - name_start
+        
+        add_variable_properties_from_defines(name_length)
+        add_variable_properties_name_from_defines(index, name_start)
+        add_variable_value_from_defines(LOCAL_VARIABLE_COUNT)
+
+        LOCAL_VARIABLE_COUNT += 1
+    
     return index
 
 def handle_defines_locals(index: int) -> int:
+    global LOCAL_VARIABLE_COUNT
+    # define_locals none
     # define_locals f32 a i32 b
-    pass
+    # define variables: #a 0 #b 1
+    # 0x02 0x01 0x7D 0x01 0x7F
+    
+    index = skipWhiteSpace(index + 13)
+
+    if equals4(index, ord('n'), ord('o'), ord('n'), ord('e')):
+        writeSectionChar(0x00)
+        return index + 4
+    
+    locals_start = index
+    local_count = 0
+
+    while memory[index] != 0:
+        index = skipWhiteSpace(index)
+        if equals3(index, ord('i'), ord('3'), ord('2')):
+            local_count += 1
+        elif equals3(index, ord('f'), ord('3'), ord('2')):
+            local_count += 1
+        elif equals3(index, ord('i'), ord('6'), ord('4')):
+            local_count += 1
+        elif equals3(index, ord('f'), ord('6'), ord('4')):
+            local_count += 1
+        else:
+            break
+        
+        index = skipWhiteSpace(index + 3)
+
+        name_start = index
+        while not isWhiteSpace(index):
+            index += 1
+        name_length = index - name_start
+
+        if name_length == 0:
+            error(index, 0x12)
+
+        add_variable_properties_from_defines(name_length)
+        add_variable_properties_name_from_defines(index, name_start)
+        add_variable_value_from_defines(LOCAL_VARIABLE_COUNT)
+        LOCAL_VARIABLE_COUNT += 1
+
+    if local_count == 0:
+        error(index, 0x12)
+
+    # One (count=1, type) group per local is valid Wasm and preserves the
+    # source order used for symbol indices, including interleaved types.
+    writeByte(local_count)
+    read_index = locals_start
+    while local_count > 0:
+        # The first pass already updated CURRENT_LINE; do not count it again.
+        while isWhiteSpace(read_index):
+            read_index += 1
+        local_type = 0x7F
+        if memory[read_index] == ord('f'):
+            local_type -= 2
+        if memory[read_index + 1] == ord('6'):
+            local_type -= 1
+        writeByte(1)
+        writeSectionChar(local_type)
+        read_index += 3
+        while isWhiteSpace(read_index):
+            read_index += 1
+        while not isWhiteSpace(read_index):
+            read_index += 1
+        local_count -= 1
+
+    return index
 
 def add_variable_properties_from_defines(variable_name_length: int) -> None:
+    global symbol_names_stack_index, symbol_names
     symbol_names[symbol_names_stack_index] = LAST_SYMBOL_ID
     symbol_names_stack_index += 1
 
@@ -1230,8 +1650,15 @@ def add_variable_properties_from_defines(variable_name_length: int) -> None:
     symbol_names[symbol_names_stack_index] = variable_name_length
     symbol_names_stack_index += 1
 
+def add_variable_properties_name_from_defines(index: int, variable_name_start: int) -> None:
+    global symbol_names_stack_index, symbol_names
+    while variable_name_start < index:
+        symbol_names[symbol_names_stack_index] = memory[variable_name_start]
+        symbol_names_stack_index += 1
+        variable_name_start += 1
+
 def add_variable_value_from_defines(value: int) -> None:
-    global LAST_SYMBOL_ID
+    global LAST_SYMBOL_ID, symbol_values, symbol_values_stack_index
     symbol_values[symbol_values_stack_index] = LAST_SYMBOL_ID
     symbol_values_stack_index += 1
 
@@ -1327,6 +1754,13 @@ def parseCmd(index: int) -> int:
         # constants
         if equals5(index, ord('c'), ord('o'), ord('n'), ord('s'), ord('t')):
             writeSectionChar(0x41 + type)
+            if type == 0 or type == 1:
+                operand_index = skipWhiteSpace(index + 5)
+                while isComment(operand_index):
+                    operand_index = skipWhiteSpace(skipComment(operand_index))
+                if memory[operand_index] == ord('$'):
+                    return getVariable(operand_index + 1, 32 if type == 0 else 64)
+                return operand_index
             return index + 5
         #arithmetic
         if equals3(index, ord('a'), ord('d'), ord('d')):
@@ -1520,6 +1954,9 @@ def parseWord(index: int) -> int:
     global LABEL_SCOPE
     global LABEL_FIRST_SYMBOL_ID
     global COUNT
+    global symbol_names_stack_index
+    global symbol_values_stack_index
+    global LAST_SYMBOL_ID
     if equals3(index, ord('i'), ord('3'), ord('2')):
         writeSectionChar(0x7F)
         return index + 3
@@ -1586,6 +2023,9 @@ def parseWord(index: int) -> int:
     if equals12(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('D'), ord('A'), ord('T'), ord('A')):
         CURRENT_SECTION = 0x0B
         return index + 12
+    if equals14(index, ord('S'), ord('E'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N'), ord('_'), ord('C'), ord('U'), ord('S'), ord('T'), ord('O'), ord('M')):
+        CURRENT_SECTION = 0x00
+        return index + 14
     if equals8(index, ord('F'), ord('U'), ord('N'), ord('C'), ord('T'), ord('I'), ord('O'), ord('N')):
         writeSectionChar(0x60)
         return index + 8
@@ -1612,15 +2052,15 @@ def parseWord(index: int) -> int:
     if equals5(index, ord('C'), ord('O'), ord('U'), ord('N'), ord('T')):
         COUNT += 1
         return index + 5
-    if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('t'), ord('y'), ord('p')):
+    if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('t'), ord('y'), ord('p'), ord('e')):
         return handle_defines_type(index)
     if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('i'), ord('m'), ord('p'), ord('o'), ord('r'), ord('t')):
         return handle_defines_import(index)
     if equals15(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('f'), ord('u'), ord('n'), ord('c'), ord('t'), ord('i'), ord('o'), ord('n')):
         return handle_defines_function(index)    
-    if equals14(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('e'), ord('x'), ord('p'), ord('o'), ord('r'), ord('t')):
+    if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('e'), ord('x'), ord('p'), ord('o'), ord('r'), ord('t')):
         return handle_defines_export(index)
-    if equals14(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('m'), ord('e'), ord('m'), ord('o'), ord('r'), ord('y')):
+    if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('m'), ord('e'), ord('m'), ord('o'), ord('r'), ord('y')):
         return handle_defines_memory(index)
     if equals11(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('d'), ord('a'), ord('t'), ord('a')):
         return handle_defines_data(index)
@@ -1628,6 +2068,18 @@ def parseWord(index: int) -> int:
         return handle_defines_code(index)
     if equals13(index, ord('d'), ord('e'), ord('f'), ord('i'), ord('n'), ord('e'), ord('_'), ord('l'), ord('o'), ord('c'), ord('a'), ord('l'), ord('s')):
         return handle_defines_locals(index)
+    if equals8(index, ord('c'), ord('o'), ord('d'), ord('e'), ord('_'), ord('e'), ord('n'), ord('d')):
+        # end opcode
+        writeSectionChar(0x0B) 
+        # reset symbol stack
+        symbol_names_stack_index = FUNCTION_SYMBOL_NAMES_START
+        symbol_values_stack_index = FUNCTION_SYMBOL_VALUES_START
+        LAST_SYMBOL_ID = FUNCTION_SYMBOL_ID_START
+        # end function section
+        WRITING_TO_FUNCTION = 0
+        writeSection(1, 0, FUNCTION_BYTES_OUT - FUNCTION_LAST_BYTES_OUT, FUNCTION_LAST_BYTES_OUT)
+        LABEL_SCOPE = 0
+        return index + 8
     if isComment(index):
         return skipComment(index)
     if memory[index] == ord('#'):

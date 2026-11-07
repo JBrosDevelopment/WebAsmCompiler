@@ -85,7 +85,7 @@ Here is the Binary that I used to create the `program.wasm` file.
 
 // CODE SECTION
 0x0A, 0x0B, // 0A = Code Section, 08= length of section in `11` bytes
-0x01, // 01 = function body of function `1` (main)
+0x01, // 01 = number of function bodies
 0x09, // 09 = size of function body in `9` bytes
 0x00, // 00 = local variable count (0)
 0x41, 0x06, // 41 = i32.const, 06 = value 6
