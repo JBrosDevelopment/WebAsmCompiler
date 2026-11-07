@@ -28,6 +28,8 @@ I will update the README as I progress through the project. Treat this almost as
     - [EXPORT Section](#export-section)
     - [CODE Section](#code-section)
     - [DATA Section *\[Added in Assembler.0.5\]*](#data-section-added-in-assembler05)
+    - [CUSTOM Section *\[Added in Assembler.1.1\]*](#custom-section-added-in-assembler11)
+    - [Define Keywords *\[Added in Assembler.1.1\]*](#define-keywords-added-in-assembler11)
     - [Python Assembler Equivalent](#python-assembler-equivalent)
     - [Implementing the Assembler in WebAsm](#implementing-the-assembler-in-webasm)
     - [Bootstrapping and Adding Versions](#bootstrapping-and-adding-versions)
@@ -42,6 +44,7 @@ I will update the README as I progress through the project. Treat this almost as
       - [WASI Hello World Example](#wasi-hello-world-example)
     - [Adding WASI to the Assembler](#adding-wasi-to-the-assembler)
       - [assembler.1.0 - Adding WASI to the Assembler](#assembler10---adding-wasi-to-the-assembler)
+      - [assembler.1.1 - `define` directives](#assembler11---define-directives)
 
 # Setting Up WebAsm
 
@@ -656,6 +659,105 @@ SECTION SECTION_DATA
 SECTION_END
 ```
 
+### CUSTOM Section [*[Added in Assembler.1.1]*](#assembler11---define-directives)
+
+This section will be assembled into the binary but is ignored by the WebAssembly runtime. This means any data in this section will not effect the output of the wasm file.
+
+```
+SECTION SECTION_CUSTOM
+uleb 0 uleb 1 ; this can be for testing purposes or for whatever but doesn't effect output. 
+SECTION_END
+```
+
+### Define Keywords [*[Added in Assembler.1.1]*](#assembler11---define-directives)
+
+* `define_type FUNCTION <parameters> -> <result>` \
+  Types: i32, i64, f32, f64. Use void for no parameters or no result. \
+  Example: `define_type FUNCTION f64 f64 -> f64` \
+  Generated symbol: `$t_f64_f64__f64`.
+* `define_import <module> <name> FUNCTION_KIND <type index>` \
+  Example: `define_import env print_i32 FUNCTION_KIND $t_i32__void` \
+  Generated symbol: `$f_env_print_i32`. 
+* `define_import <module> <name> MEMORY_KIND <flags> <min> [<max>]` \
+  Example: `define_import env memory MEMORY_KIND 0 1` \
+  Generated symbol: `$m_env_memory`.
+* `define_function <type index> <name>` \
+  Example: `define_function $t_void__void main -> $f_main.` \
+  Function bodies must follow declaration order. 
+* `define_memory <flags> <min> [<max>] <name>` \
+  Example: `define_memory 1 1 2 working -> $m_working.` \
+  Flags 0: minimum only. Flags 1: minimum and maximum. \
+  Sizes are 64 KiB pages; 0 <= min <= max <= 65536 when max is supplied. \
+  Imported and defined memories are separate. Imported indices come first. \
+  Shared memory and memory64 are not supported by these directives.
+* `define_export <name> FUNCTION_KIND <function index>`
+* `define_export <name> MEMORY_KIND <memory index>` \
+  Export names must be unique across all kinds.
+* `define_code none`
+* `define_code <type> <parameter name> [<type> <parameter name> ...]` \
+  Follow with define_locals none, or: \
+  `define_locals <type> <local name> [<type> <local name> ...]` \
+  Finish with code_end. It writes the function's final end opcode. \
+  Use end only for nested blocks/loops/ifs inside a DEFINE body. \
+  Locals follow parameters and preserve source order, including mixed types.
+* `define_data active <offset> STRING "text"`
+* `define_data active <offset> STRING_NT "text"`
+* `define_data active <offset> DATA <length> <raw bytes>` \
+  `STRING_NT` includes a trailing null terminating zero. Active segments target memory 0. \
+  For passive segments, use passive instead of active and OMIT the offset: \
+  `define_data passive STRING "text"`
+
+Example program using these features:
+```
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+define_type FUNCTION void -> void
+define_type FUNCTION f64 -> void
+define_type FUNCTION f64 f64 -> f64
+SECTION_END
+
+SECTION SECTION_IMPORT
+define_import env print_f64 FUNCTION_KIND $t_f64__void
+SECTION_END
+
+SECTION SECTION_FUNCTION
+define_function $t_void__void main
+define_function $t_f64_f64__f64 something
+SECTION_END
+
+SECTION SECTION_EXPORT
+define_export main FUNCTION_KIND $f_main
+SECTION_END
+
+SECTION SECTION_CODE
+    define_code none
+        define_locals none
+        f64.const float64 1.55
+        f64.const float64 7.99
+        call $f_something
+        call $f_env_print_f64
+    code_end
+
+    define_code f64 a f64 b
+        define_locals 
+            f64 c
+            f64 d
+        local.get $a
+        local.get $b
+        f64.mul
+        local.set $c
+        local.get $a
+        local.get $b
+        f64.div_s
+        local.tee $d
+        
+        local.get $c
+        f64.add
+    code_end
+SECTION_END
+```
+
 ### Python Assembler Equivalent
 
 Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [pseudo-testing/FullAssembler.py](pseudo-testing/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
@@ -1191,3 +1293,28 @@ A few more updates will come before the assembler is in a position to be ready f
 ---
 
 To be transparent I used Chat GPT to make assembler.1.0.wal based off of assembler.0.7.wal but with the changes implemented in the FullAssembler.py. Because of the scale of assembler.0.7 and the scale of the changes made in this update this seemed like the best use of time so I don't get stuck on this for too long of a time. 
+
+#### assembler.1.1 - `define` directives
+
+This update was another beast. I made all the updates in the FullAssembler.py myself, and then got ChatGPT to implement the changes in the assembler.1.1.wal file. In this update, I added the following keywords:
+
+- `define_type`
+- `define_import`
+- `define_function`
+- `define_memory`
+- `define_export`
+- `define_code`
+- `code_end`
+- `define_locals`
+- `define_data`
+- `SECTION_CUSTOM`
+
+All the `define_<type>` keywords have their uses described above in the [Define Keywords](#define-keywords-added-in-assembler11) Section.
+
+I also made it so that when a variable `#<name> <value>` is set multiple times, they all point to the same variable instead of multiple variables with the same name. This will keep the symbol stack smaller and prevent potential errors.
+
+I also made local variables and parameters defined in the `define_code` and `define_locals` keywords be local to the function itself. This means when entering a function it saves the current stack pointer before adding any locals or parameters. This is so when exiting the function it returns to that saved stack position and any new variables made are forgotten allowing future functions to share the same local variable name.
+
+I added the `SECTION_CUSTOM` for any  debugging or future need of this section. This section is assembled into the wasm binary but is ignored by the wasm runtime host.
+
+The define keywords are a feature I've been wanting to add for a while. I have a feeling only 1 more update is needed before moving onto the compiler! Yeah this update was definitely a leap forward for this project. 
