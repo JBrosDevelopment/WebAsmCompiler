@@ -45,6 +45,8 @@ I will update the README as I progress through the project. Treat this almost as
     - [Adding WASI to the Assembler](#adding-wasi-to-the-assembler)
       - [assembler.1.0 - Adding WASI to the Assembler](#assembler10---adding-wasi-to-the-assembler)
       - [assembler.1.1 - `define` directives](#assembler11---define-directives)
+      - [assembler.1.2 - Updated assembler codebase](#assembler12---updated-assembler-codebase)
+- [Compiler](#compiler)
 
 # Setting Up WebAsm
 
@@ -1318,3 +1320,47 @@ I also made local variables and parameters defined in the `define_code` and `def
 I added the `SECTION_CUSTOM` for any  debugging or future need of this section. This section is assembled into the wasm binary but is ignored by the wasm runtime host.
 
 The define keywords are a feature I've been wanting to add for a while. I have a feeling only 1 more update is needed before moving onto the compiler! Yeah this update was definitely a leap forward for this project. 
+
+#### assembler.1.2 - Updated assembler codebase
+
+Updated the codebase to use DEFINE syntax for types, imports, functions, memory, exports, function bodies, locals, and data segments. \
+Locals use scoped names such as $index and $result instead of function prefixes or numeric local indices
+
+# Compiler
+
+The Assembler is now "powerful" enough to start working on the compiler. I want the syntax for the compiler to compile to be C like. I want the language to be compilable by the GCC compiler into a C object file. Basically the vision is to have this language, I'll call it CWeb (`.cweb` file), to be able to be compiled into Web Assembly through this project and into an executable binary through gcc/clang/msvc. So basically CWeb is a subset of C. Not every C file can be compiled by a CWeb compiler, but every CWeb file can be compiled through a C compiler. Similarly to C++ being a superset of C, except CWeb is a subset and is a less powerful version of C.
+
+For this project, I want the compiler to have a build system, so that there would be a module object and many functions to build the module. For example in pseudo-code, a function `module.add_type(new TypeObject([i32, i32], [void]))`, which creates a type `(i32, i32) -> void` in the type section. This is so that after the compiler is finished it is already in a state that can be translated to a build system easily. 
+
+Here is an example of how I want CWeb to look:
+
+```
+//! export main
+#include<math.h>
+
+extern void print(char* str);
+
+struct t_Triangle { 
+    double sideA;
+    double sideB;
+    double sideC;
+};
+
+typedef struct t_Triangle Triangle;
+
+bool right_triangle(Triangle* t);
+
+int main() {
+    Triangle tri = { 3, 4, 5 };
+    if (right_triangle(&tri)) {
+        print("Right Triangle!");
+    } else {
+        print("Not Right Triangle");
+    }
+    return 0;
+}
+
+bool right_triangle(Triangle* t) {
+    return t->sideC == sqrt(t->sideA * t->sideA + t->sideB * t->sideB)
+}
+```
