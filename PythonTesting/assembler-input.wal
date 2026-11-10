@@ -1,0 +1,80 @@
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+define_type FUNCTION void -> void
+define_type FUNCTION f64 -> void
+define_type FUNCTION i32 -> void
+define_type FUNCTION f64 f64 -> f64
+SECTION_END
+
+SECTION SECTION_IMPORT
+; define_import env memory_imported MEMORY_KIND 0 1
+define_import env print_f64 FUNCTION_KIND $t_f64__void
+define_import env print_i32 FUNCTION_KIND $t_i32__void
+SECTION_END
+
+SECTION SECTION_FUNCTION
+define_function $t_void__void main
+define_function $t_f64_f64__f64 pythagorean
+define_function $t_void__void other
+SECTION_END
+
+SECTION SECTION_MEMORY
+define_memory 1 1 2 memory_defined
+SECTION_END
+
+SECTION SECTION_EXPORT
+; define_export memory_defined MEMORY_KIND $m_memory_defined
+define_export main FUNCTION_KIND $f_main
+SECTION_END
+
+#s_hw 5000
+#s_nt 5012
+#s_dw 5029
+
+SECTION SECTION_CODE
+    define_code none
+        define_locals none
+        f64.const float64 1.55
+        f64.const float64 7.99
+        call $f_pythagorean
+        call $f_env_print_f64
+        call $f_other
+    code_end
+
+    define_code f64 a f64 b
+        define_locals none
+        local.get $a
+        local.get $a
+        f64.mul
+        local.get $b
+        local.get $b
+        f64.mul
+        f64.add
+    code_end
+
+    define_code none
+        define_locals i32 a i32 b
+        i32.const sleb 100
+        local.set $a
+        i32.const sleb 101
+        local.set $b
+
+        local.get $a
+        local.get $b
+        i32.add
+        i32.const sleb 200
+        i32.gt_s
+        if NO_RETURN
+            i32.const $s_hw
+            i32.load8_u uleb 0 uleb 0 
+            call $f_env_print_i32
+        end
+    code_end
+SECTION_END
+
+SECTION SECTION_DATA
+define_data active $s_hw STRING "Hello World!"
+define_data active $s_nt STRING_NT "Null Terminated!"
+define_data active $s_dw DATA 9 str data hex 20 str way hex 00
+SECTION_END

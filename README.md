@@ -1348,7 +1348,7 @@ typedef struct { // CWeb doesn't allow structs to be created without typedef bef
     double sideC;
 } Triangle;
 
-bool right_triangle(Triangle* t); // CWeb allows forward heading functions
+int right_triangle(Triangle* t); // CWeb allows forward heading functions
 
 // this macro tells the compiler to export main to be exposed to JS or WASI host
 export int main() {
@@ -1361,7 +1361,7 @@ export int main() {
     return 0;
 }
 
-bool right_triangle(Triangle* t) {
+int right_triangle(Triangle* t) {
     return t->sideC == double_sqrt(t->sideA * t->sideA + t->sideB * t->sideB)
 }
 ```
@@ -1483,3 +1483,4 @@ I'm going to first before anything outline what is included in the first version
 | while loop | `while (<condition>) <block> | :white_check_mark: | :white_check_mark: | |
 | do-while loop | `do <block> while (<condition>)` | :white_check_mark: | :x: | will be added later |
 | for loops | `for (<initalizer>;<condition>;<update>) <block>` | :white_check_mark: | :x: | will be added later |
+| strings | `"<text>"` | :white_check_mark: | :white_check_mark: | |
