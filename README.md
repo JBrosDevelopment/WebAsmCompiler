@@ -47,6 +47,8 @@ I will update the README as I progress through the project. Treat this almost as
       - [assembler.1.1 - `define` directives](#assembler11---define-directives)
       - [assembler.1.2 - Updated assembler codebase](#assembler12---updated-assembler-codebase)
 - [Compiler](#compiler)
+  - [Converting CWeb to WAL example](#converting-cweb-to-wal-example)
+  - [Outlining CWeb Version 1](#outlining-cweb-version-1)
 
 # Setting Up WebAsm
 
@@ -762,12 +764,12 @@ SECTION_END
 
 ### Python Assembler Equivalent
 
-Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [pseudo-testing/FullAssembler.py](pseudo-testing/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
+Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [PythonTesting/FullAssembler.py](PythonTesting/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
 
 ```
-PS D:\WebAsmCompiler> python .\pseudo-testing\FullAssembler.py
+PS D:\WebAsmCompiler> python .\PythonTesting\FullAssembler.py
 /* ... output ... */ 
-PS D:\WebAsmCompiler> node .\pseudo-testing\bin\run_program_wasm.js
+PS D:\WebAsmCompiler> node .\PythonTesting\bin\run_program_wasm.js
 42
 ```
 
@@ -859,7 +861,7 @@ Here are the parameters:
 
 Besides showing me many bug fixes for my python assembler, it did in fact create the assembler in the Assembly language. The assembler is in the [assembler.0.1.wal](./Assembler/assembler.0.1.wal) file. I will be using this assembler to assemble my input assembly program that does the same thing as the python assembler. This is a huge step forward in this project, and I am excited to see what I can do with this new assembler. It is crazy how it just did it, and if you open up the file you will see it is 9000 lines long, which is insane. It works perfectly, very surprisingly. The final `bin/assembler.0.1.wasm` file is **14.5 KB** (14,879 Bytes).
 
-I then created an [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file that adds `MEMORY_KIND` and `COUNT` keywords. I made the changes myself and put them in the [FullAssembler.py](./pseudo-testing/FullAssembler.py) and made the changes in the [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file. I had Chat GPT then make the file easier to read and formatted it better, as well as using the `$`, `#`, `@`, and `^` symbols for variables and labels making the code more readable. The changes I made in the file also had bugs and Chat GPT was able to catch the bugs and help me fix them. The final file reached 7939 lines of code 11,860 Bytes. The reason it is smaller is because the way Chat GPT was matching character and tokens made no sense to me, and I suggested using `str A` and then adding `uleb 128` instead of using a `i32.shl` and other weird things. This really optimized the code by a signifigent amount. 
+I then created an [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file that adds `MEMORY_KIND` and `COUNT` keywords. I made the changes myself and put them in the [FullAssembler.py](./PythonTesting/FullAssembler.py) and made the changes in the [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file. I had Chat GPT then make the file easier to read and formatted it better, as well as using the `$`, `#`, `@`, and `^` symbols for variables and labels making the code more readable. The changes I made in the file also had bugs and Chat GPT was able to catch the bugs and help me fix them. The final file reached 7939 lines of code 11,860 Bytes. The reason it is smaller is because the way Chat GPT was matching character and tokens made no sense to me, and I suggested using `str A` and then adding `uleb 128` instead of using a `i32.shl` and other weird things. This really optimized the code by a signifigent amount. 
 
 For example assembler.0.1.wal does this, taking 8 bytes per adding a chacter to the stack:
 
@@ -1168,7 +1170,7 @@ node Assembler/run-wasi.mjs Assembler/bin/hello-wasi.wasm
 
 ### Adding WASI to the Assembler
 
-First I needed to install `wasi` from the [GitHub Repo](https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.1). Then I tested the hello world program above and it worked perfectly. Then I used the python `pseudo-testing/FullAssembler.py` to modify the assembler to use `fd_read` and `fd_write` to read and write the input and output files. I also made the CLI for the assembler to be able to run the assembler with command line arguments. I also added runtime error handling and the `_start` function to the assembler. After adding all this in the python file, which was no small feat, I worked on converting the changes to the new assembler.1.0.wal file. 
+First I needed to install `wasi` from the [GitHub Repo](https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.1). Then I tested the hello world program above and it worked perfectly. Then I used the python `PythonTesting/FullAssembler.py` to modify the assembler to use `fd_read` and `fd_write` to read and write the input and output files. I also made the CLI for the assembler to be able to run the assembler with command line arguments. I also added runtime error handling and the `_start` function to the assembler. After adding all this in the python file, which was no small feat, I worked on converting the changes to the new assembler.1.0.wal file. 
 
 This whole transition was a difficult process and took me a minute to wrap my head around it. Chat GPT very much helped me with this update, and I was able to verify a lot of its code and for it to verify a lot of my code. 
 
@@ -1334,24 +1336,23 @@ For this project, I want the compiler to have a build system, so that there woul
 
 Here is an example of how I want CWeb to look:
 
-```
+```c
 //! export main
-#include<math.h>
+#include<import.hweb>
+#include<math.hweb>
+#define export // macro for CWeb -- not read by CWeb compiler but read by C compilers
 
-extern void print(char* str);
-
-struct t_Triangle { 
-    double sideA;
+typedef struct { // CWeb doesn't allow structs to be created without typedef before it.
+    double sideA;// This allows getting variables easier not having to watch out for struct keyword
     double sideB;
     double sideC;
-};
+} Triangle;
 
-typedef struct t_Triangle Triangle;
+bool right_triangle(Triangle* t); // CWeb allows forward heading functions
 
-bool right_triangle(Triangle* t);
-
-int main() {
-    Triangle tri = { 3, 4, 5 };
+// this macro tells the compiler to export main to be exposed to JS or WASI host
+export int main() {
+    Triangle tri = { 3, 4, 5 }; // only allowed way to initialize struct in CWeb
     if (right_triangle(&tri)) {
         print("Right Triangle!");
     } else {
@@ -1361,6 +1362,124 @@ int main() {
 }
 
 bool right_triangle(Triangle* t) {
-    return t->sideC == sqrt(t->sideA * t->sideA + t->sideB * t->sideB)
+    return t->sideC == double_sqrt(t->sideA * t->sideA + t->sideB * t->sideB)
 }
 ```
+
+and in import.hweb:
+
+```c
+// import is keyword for CWeb but not for C. Import will import from JS or WASI host.
+#define import extern // CWeb macro for C compiler -- ignored by CWeb, macro used by C compiler
+
+import void print(char* str);
+```
+
+and in math.hweb
+```c
+// builtin is keyword for CWeb but not for C. builtin is for functions that need to be defined for CWeb but the implementation is a builtin opcode
+// For C compilers, it can also use extern because it needs to be implemented somewhere else.
+#define builtin extern // CWeb macro for C 
+
+builtin double double_sqrt(double value);
+builtin float float_sqrt(float value);
+builtin long long_sqrt(long value);
+builtin int int_sqrt(int value);
+
+// any other math functions...
+double double_pow(double number, int exponent) {
+    for (int i = 1; i < exponent; i ++) number *= number;
+    return number;
+}
+```
+
+## Converting CWeb to WAL example
+
+This could be an example program and how it could be converted to WAL
+
+main.cweb:
+
+```c
+#define export // not read by CWeb but read by GCC
+#define import extern // not read by CWeb but read by GCC
+
+import void print_int(int num);
+
+export int main() {
+    int a = -5;
+    int b = 23;
+    int c = a + b;
+    print_int(c);
+    return c;
+}
+```
+
+This could be converted into:
+
+```
+SECTION_HEADER
+
+SECTION SECTION_TYPE
+define_type FUNCTION void -> i32
+define_type FUNCTION i32 -> void
+SECTION_END
+
+SECTION SECTION_IMPORT
+define_import import print_int FUNCTION_KIND $t_i32__void
+SECTION_END
+
+SECTION SECTION_FUNCTION
+define_function $t_void__i32 main
+SECTION_END
+
+SECTION SECTION_EXPORT
+define_export main FUNCTION_KIND $f_main
+SECTION_END
+
+SECTION SECTION_CODE
+define_code none
+    define locals
+        i32 a
+        i32 b
+        i32 c
+    i32.const sleb -5
+    local.tee $a
+    i32.const sleb 23
+    local.tee $b
+    i32.add
+    local.tee $c
+    call $f_import_print_int
+    local.get $c
+    return
+code_end
+SECTION_END
+```
+
+And if it was compiled by GCC, it would output a valid object file, but you would need to include a header file and link that to the object file for the finished executable.
+
+## Outlining CWeb Version 1
+
+I'm going to first before anything outline what is included in the first version of CWeb, at-least for earlier versions, and what won't be added.
+
+| Feature | Syntax | C | CWeb | Note |
+|--|--|--|--|--|
+| Variable Declaration | `<type> <name> = <value>` | :white_check_mark: | :x: | will be added later |
+| Empty Declaration | `<type> <name>` | :white_check_mark: | :white_check_mark: | |
+| Set Variables | `<name> = <value>` | :white_check_mark: | :white_check_mark: | |
+| Empty Multi-Variable Declaration | `<type> <name>, <name>` | :white_check_mark: | :x: | |
+| Multi-Variable Declaration | `<type> <name> = <value>, <name> = <value>` | :white_check_mark: | :x: | |
+| Const Variables | `const <type> <name>` | :white_check_mark: | :x: | |
+| Pointers | `<type> *<name>` | :white_check_mark: | :x: | will be added later |
+| Address Of | `&<name>` | :white_check_mark: | :x: | will be added later |
+| Structs | `struct <name> { <properties> }` | :white_check_mark: | :x: | will be added later |
+| Sequential Struct Initialization | `{ <value>, <value> ... }` | :white_check_mark: | :white_check_mark: |
+| Struct Designated Initializers | `{ .<name> = <value, .<name> = value ...}` | :white_check_mark: | :x: |
+| Functions | `<type> <name>(<parameters>) { <body> }` | :white_check_mark: | :white_check_mark: | |
+| Import Functions | `import <function_declaration>(){}` | :x: | :white_check_mark: | added macro remapping `import` to `extern` for C |
+| Builtin Functions | `builtin <function_declaration>(){}` | :x: | :white_check_mark: | added macro remapping `builtin` to `extern` for C |
+| Export Functions | `export <function_declaration>(){}` | :x: | :white_check_mark: | added empty macro `export` for C |
+| Type Define | `typedef <type> <name>` | :white_check_mark: | :white_check_mark: | |
+| if/else statements | `if (<condition>) <block> else <block>` | :white_check_mark: | :white_check_mark: | |
+| while loop | `while (<condition>) <block> | :white_check_mark: | :white_check_mark: | |
+| do-while loop | `do <block> while (<condition>)` | :white_check_mark: | :x: | will be added later |
+| for loops | `for (<initalizer>;<condition>;<update>) <block>` | :white_check_mark: | :x: | will be added later |

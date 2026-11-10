@@ -173,7 +173,7 @@ def handle_cli_input():
     global output_path, input_name, memory
 
     if len(sys.argv) != 3:
-        # The `python` command will not be in the WAL version, this is for the Python Pseudo-Testing version.
+        # The `python` command will not be in the WAL version, this is for the Python PythonTesting version.
         runtime_error(s_cli_arguments)
 
     input_name = sys.argv[1]

@@ -1,9 +1,9 @@
 import { readFileSync } from "fs";
 
 // to run, 
-// node pseudo-testing/bin/run_program_wasm.js
+// node PythonTesting/bin/run_program_wasm.js
 
-const wasmBytes = readFileSync("./pseudo-testing/bin/test_defines.wasm");
+const wasmBytes = readFileSync("./PythonTesting/bin/test_defines.wasm");
 
 const imports = {
     env: {
