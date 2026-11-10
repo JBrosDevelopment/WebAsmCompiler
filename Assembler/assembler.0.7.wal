@@ -1,6 +1,6 @@
 ; Assembler.0.7
 ; Adds float32/float64 decimal operands and floating-point diagnostics.
-; Decimal parsing, normalization, and ties-to-even rounding follow FullAssembler.py.
+; Decimal parsing, normalization, and ties-to-even rounding follow Assembler.py.
 ; Only an optional minus sign, decimal digits, and one decimal point are accepted.
 ; f64 calculations and i64 bit fields retain both IEEE binary32 and binary64 precision.
 ; Raw type bytes keep this source bootstrappable by assembler 0.6.

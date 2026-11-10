@@ -117,7 +117,7 @@ s_define_locals_end = "`. Valid syntax is 'define_locals <local1_type> <local1_n
 
 # runtime error strings
 s_output_limit = "Generated binary exceeds the output buffer capacity\0"
-s_cli_arguments = "Expected two arguments: python FullAssembler.py input.wal output.wasm\0"
+s_cli_arguments = "Expected two arguments: python Assembler.py input.wal output.wasm\0"
 s_input_file = "Input file does not exist or is not a regular file\0"
 s_same_input_output = "Input and output must be different files\0"
 s_input_limit = "Source exceeds the input region capacity\0"

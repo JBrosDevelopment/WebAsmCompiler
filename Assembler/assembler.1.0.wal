@@ -8106,7 +8106,7 @@ SECTION SECTION_CODE
 	end
 	FUNCTION_END
 
-; Runtime helpers mirror FullAssembler.py; WASI imports replace Python host I/O.
+; Runtime helpers mirror Assembler.py; WASI imports replace Python host I/O.
 ; Local slots are numeric here to avoid consuming the assembler's symbol storage.
 
 FUNCTION_START ; print_i32(value): format signed decimal to stderr.

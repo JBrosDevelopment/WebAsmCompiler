@@ -764,10 +764,10 @@ SECTION_END
 
 ### Python Assembler Equivalent
 
-Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [PythonTesting/FullAssembler.py](PythonTesting/FullAssembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
+Before I try to implement this in WebAsm, I will write the assembler in python. The finished version is [PythonTesting/Assembler.py](PythonTesting/Assembler.py). What is discouraging is that the final assembler is **880 lines** of python code. This will be a LOT of WebAsm code when I get to converting it. But the python assembler output a binary file based on the input code in the python file at the top. The text file will be the assembly language, and the binary file will be the WebAsm binary. You can run the assembler with the following commands:
 
 ```
-PS D:\WebAsmCompiler> python .\PythonTesting\FullAssembler.py
+PS D:\WebAsmCompiler> python .\PythonTesting\Assembler.py
 /* ... output ... */ 
 PS D:\WebAsmCompiler> node .\PythonTesting\bin\run_program_wasm.js
 42
@@ -861,7 +861,7 @@ Here are the parameters:
 
 Besides showing me many bug fixes for my python assembler, it did in fact create the assembler in the Assembly language. The assembler is in the [assembler.0.1.wal](./Assembler/assembler.0.1.wal) file. I will be using this assembler to assemble my input assembly program that does the same thing as the python assembler. This is a huge step forward in this project, and I am excited to see what I can do with this new assembler. It is crazy how it just did it, and if you open up the file you will see it is 9000 lines long, which is insane. It works perfectly, very surprisingly. The final `bin/assembler.0.1.wasm` file is **14.5 KB** (14,879 Bytes).
 
-I then created an [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file that adds `MEMORY_KIND` and `COUNT` keywords. I made the changes myself and put them in the [FullAssembler.py](./PythonTesting/FullAssembler.py) and made the changes in the [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file. I had Chat GPT then make the file easier to read and formatted it better, as well as using the `$`, `#`, `@`, and `^` symbols for variables and labels making the code more readable. The changes I made in the file also had bugs and Chat GPT was able to catch the bugs and help me fix them. The final file reached 7939 lines of code 11,860 Bytes. The reason it is smaller is because the way Chat GPT was matching character and tokens made no sense to me, and I suggested using `str A` and then adding `uleb 128` instead of using a `i32.shl` and other weird things. This really optimized the code by a signifigent amount. 
+I then created an [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file that adds `MEMORY_KIND` and `COUNT` keywords. I made the changes myself and put them in the [Assembler.py](./PythonTesting/Assembler.py) and made the changes in the [assembler.0.2.wal](./Assembler/assembler.0.2.wal) file. I had Chat GPT then make the file easier to read and formatted it better, as well as using the `$`, `#`, `@`, and `^` symbols for variables and labels making the code more readable. The changes I made in the file also had bugs and Chat GPT was able to catch the bugs and help me fix them. The final file reached 7939 lines of code 11,860 Bytes. The reason it is smaller is because the way Chat GPT was matching character and tokens made no sense to me, and I suggested using `str A` and then adding `uleb 128` instead of using a `i32.shl` and other weird things. This really optimized the code by a signifigent amount. 
 
 For example assembler.0.1.wal does this, taking 8 bytes per adding a chacter to the stack:
 
@@ -1008,7 +1008,7 @@ The binary is 12,287 bytes, down from 17,218 bytes for 0.5. The smallest assembl
 
 This update allows a way to encode Floating Point numbers. This is to start experimenting with f32 and f64 operations and for future work with the compiler supporting floats. I wanted to make one encoding keyword `float`, but I don't think there's a way to do this when differentiating between 4 and 8 byte floats. This is because `f64.const` expects 8 immediate bytes, while `f32.const` expects 4 immediate bytes. 
 
-It turns out floating point arithmatic is a beast. This was not easy for me to understand. [This article](https://eryktr.github.io/2022/06/representation-of-numbers-in-computer-memory-iee754.html) by [Eryk Trzeciakiewicz](https://eryktr.github.io/author/eryktr/) was a very helpful source in trying to understand how this works. After even learning how it worked I tried my best to implement these functions into the FullAssembler.py file, but I had ChatGPT check it to make sure I did it correct and unsurprisingly its version was far better than mine. I ended up just using ChatGPT's version so I didn't have to worry about my code breaking. 
+It turns out floating point arithmatic is a beast. This was not easy for me to understand. [This article](https://eryktr.github.io/2022/06/representation-of-numbers-in-computer-memory-iee754.html) by [Eryk Trzeciakiewicz](https://eryktr.github.io/author/eryktr/) was a very helpful source in trying to understand how this works. After even learning how it worked I tried my best to implement these functions into the Assembler.py file, but I had ChatGPT check it to make sure I did it correct and unsurprisingly its version was far better than mine. I ended up just using ChatGPT's version so I didn't have to worry about my code breaking. 
 
 Here is an example of using the new `float32` and `float64` keywords
 
@@ -1170,7 +1170,7 @@ node Assembler/run-wasi.mjs Assembler/bin/hello-wasi.wasm
 
 ### Adding WASI to the Assembler
 
-First I needed to install `wasi` from the [GitHub Repo](https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.1). Then I tested the hello world program above and it worked perfectly. Then I used the python `PythonTesting/FullAssembler.py` to modify the assembler to use `fd_read` and `fd_write` to read and write the input and output files. I also made the CLI for the assembler to be able to run the assembler with command line arguments. I also added runtime error handling and the `_start` function to the assembler. After adding all this in the python file, which was no small feat, I worked on converting the changes to the new assembler.1.0.wal file. 
+First I needed to install `wasi` from the [GitHub Repo](https://github.com/bytecodealliance/wasmtime/releases/tag/v50.0.1). Then I tested the hello world program above and it worked perfectly. Then I used the python `PythonTesting/Assembler.py` to modify the assembler to use `fd_read` and `fd_write` to read and write the input and output files. I also made the CLI for the assembler to be able to run the assembler with command line arguments. I also added runtime error handling and the `_start` function to the assembler. After adding all this in the python file, which was no small feat, I worked on converting the changes to the new assembler.1.0.wal file. 
 
 This whole transition was a difficult process and took me a minute to wrap my head around it. Chat GPT very much helped me with this update, and I was able to verify a lot of its code and for it to verify a lot of my code. 
 
@@ -1296,11 +1296,11 @@ A few more updates will come before the assembler is in a position to be ready f
 
 ---
 
-To be transparent I used Chat GPT to make assembler.1.0.wal based off of assembler.0.7.wal but with the changes implemented in the FullAssembler.py. Because of the scale of assembler.0.7 and the scale of the changes made in this update this seemed like the best use of time so I don't get stuck on this for too long of a time. 
+To be transparent I used Chat GPT to make assembler.1.0.wal based off of assembler.0.7.wal but with the changes implemented in the Assembler.py. Because of the scale of assembler.0.7 and the scale of the changes made in this update this seemed like the best use of time so I don't get stuck on this for too long of a time. 
 
 #### assembler.1.1 - `define` directives
 
-This update was another beast. I made all the updates in the FullAssembler.py myself, and then got ChatGPT to implement the changes in the assembler.1.1.wal file. In this update, I added the following keywords:
+This update was another beast. I made all the updates in the Assembler.py myself, and then got ChatGPT to implement the changes in the assembler.1.1.wal file. In this update, I added the following keywords:
 
 - `define_type`
 - `define_import`

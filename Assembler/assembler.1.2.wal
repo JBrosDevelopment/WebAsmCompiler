@@ -7637,7 +7637,7 @@ SECTION SECTION_CODE
     code_end
 
 
-    ; Runtime helpers mirror FullAssembler.py; WASI imports replace Python host I/O.
+    ; Runtime helpers mirror Assembler.py; WASI imports replace Python host I/O.
     ; Parameters and locals are scoped to each DEFINE function body.
 
     ; print_i32()
