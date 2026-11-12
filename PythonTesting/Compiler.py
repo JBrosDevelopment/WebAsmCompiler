@@ -49,6 +49,51 @@ s_output_file = "Output path is not a regular file\0"
 s_memory_out_of_bounds = "Memory out of bounds\0"
 s_lexer_stack_limit = "Lexer stack limit exceeded\0"
 
+other_builtin_type: int = 1 # global
+other_identifier: int = 2 # global
+res_export: int = 10 # global
+res_import: int = 11 # global
+res_if: int = 12 # global
+res_else: int = 13 # global
+res_while: int = 14 # global
+res_return: int = 15 # global
+res_break: int = 16 # global
+res_continue: int = 17 # global
+res_struct: int = 18 # global
+res_typedef: int = 19 # global
+op_add: int = 30 # `+` global
+op_sub: int = 31 # `-` global
+op_mul: int = 32 # `*` global
+op_div: int = 33 # `/` global
+op_mod: int = 34 # `%` global
+op_bitwise_and: int = 35 # `&` global
+op_bitwise_or: int = 36 # `|` global
+op_bitwise_xor: int = 37 # `^`  global
+op_shl: int = 38 # `<<` global
+op_shr: int = 39 # `>>` global
+op_eq: int = 40 # `==` global
+op_neq: int = 41 # `!=` global
+op_lt: int = 42 # `<` global
+op_gt: int = 43 # `>` global
+op_lte: int = 44 # `<=` global
+op_gte: int = 45 # `>=` global
+op_assign: int = 46 # `=` global
+op_add_assign: int = 47 # `+=` global
+op_sub_assign: int = 48 # `-=` global
+op_mul_assign: int = 49 # `*=` global
+op_div_assign: int = 50 # `/=` global
+op_mod_assign: int = 51 # `%=` global
+op_bitwise_and_assign: int = 52 # `&=` global
+op_bitwise_or_assign: int = 53 # `|=` global
+op_bitwise_xor_assign: int = 54 # `^=`  global
+op_logical_and: int = 55 # `&&` global
+op_logical_or: int = 56 # `||` global
+op_logical_not: int = 57 # `!` global
+op_bitwise_not: int = 58 # `~` global
+op_bitwise_not_assign: int = 59 # `~=` global
+op_increment: int = 60 # `++` global
+op_decrement: int = 61 # `--` global
+
 def fd_read(fd, iovs_ptr, iovs_len, nread_ptr): # imported WASI function
     iovs_ptr.extend(fd.read(iovs_len))
     return 0
@@ -203,31 +248,44 @@ def skipWhiteSpace(index: int) -> int:
 def isOperator(index: int) -> int:
     if index < stack_length:
         runtime_error(s_memory_out_of_bounds)
-    return memory[index] == ord('+') \
-        or memory[index] == ord('-') \
-        or memory[index] == ord('*') \
-        or memory[index] == ord('/') \
-        or memory[index] == ord('%') \
+    return memory[index] == ord('-') \
         or memory[index] == ord('=') \
-        or memory[index] == ord('(') \
-        or memory[index] == ord(')') \
+        or memory[index] == ord('+') \
         or memory[index] == ord('[') \
         or memory[index] == ord(']') \
         or memory[index] == ord('{') \
         or memory[index] == ord('}') \
-        or memory[index] == ord(';') \
-        or memory[index] == ord(',') \
-        or memory[index] == ord('.') \
-        or memory[index] == ord(':') \
-        or memory[index] == ord('<') \
-        or memory[index] == ord('>') \
-        or memory[index] == ord('!') \
-        or memory[index] == ord('&') \
         or memory[index] == ord('|') \
-        or memory[index] == ord('~') \
-        or memory[index] == ord('^') \
+        or memory[index] == ord('\\') \
+        or memory[index] == ord(';') \
+        or memory[index] == ord(':') \
+        or memory[index] == ord('\'') \
+        or memory[index] == ord('"') \
+        or memory[index] == ord(',') \
+        or memory[index] == ord('<') \
+        or memory[index] == ord('.') \
+        or memory[index] == ord('>') \
+        or memory[index] == ord('/') \
         or memory[index] == ord('?') \
-        or memory[index] == ord('#') 
+        or memory[index] == ord('!') \
+        or memory[index] == ord('@') \
+        or memory[index] == ord('#') \
+        or memory[index] == ord('$') \
+        or memory[index] == ord('%') \
+        or memory[index] == ord('^') \
+        or memory[index] == ord('&') \
+        or memory[index] == ord('*') \
+        or memory[index] == ord('(') \
+        or memory[index] == ord(')') \
+        or memory[index] == ord('`') \
+        or memory[index] == ord('~') \
+
+def getEndOfCapture(index: int, capture: int) -> int:
+    while memory[index] != capture:
+        if index >= stack_length:
+            runtime_error(s_memory_out_of_bounds)
+        index += 1
+    return index
 
 def getEndOfWord(index: int) -> int:
     while not isWhiteSpace(index) and not isOperator(index):
@@ -375,81 +433,77 @@ def isType(index: int) -> int:
         return 1
     return -1
 
-def operatorId(index: int) -> int:
-    if index < stack_length:
+def getDoubleOperator(index: int) -> int:
+    if index + 1 < stack_length:
         runtime_error(s_memory_out_of_bounds)
+    if memory[index] == ord('=') + memory[index + 1] == ord('='): return op_eq
+    if memory[index] == ord('+') + memory[index + 1] == ord('='): return op_add_assign
+    if memory[index] == ord('-') + memory[index + 1] == ord('='): return op_sub_assign
+    if memory[index] == ord('*') + memory[index + 1] == ord('='): return op_mul_assign
+    if memory[index] == ord('/') + memory[index + 1] == ord('='): return op_div_assign
+    if memory[index] == ord('%') + memory[index + 1] == ord('='): return op_mod_assign
+    if memory[index] == ord('&') + memory[index + 1] == ord('='): return op_bitwise_and_assign
+    if memory[index] == ord('|') + memory[index + 1] == ord('='): return op_bitwise_or_assign
+    if memory[index] == ord('^') + memory[index + 1] == ord('='): return op_bitwise_xor_assign
+    if memory[index] == ord('<') + memory[index + 1] == ord('='): return op_lte
+    if memory[index] == ord('>') + memory[index + 1] == ord('='): return op_gte
+    if memory[index] == ord('!') + memory[index + 1] == ord('='): return op_neq
+    if memory[index] == ord('>') + memory[index + 1] == ord('>'): return op_shr
+    if memory[index] == ord('<') + memory[index + 1] == ord('<'): return op_shl
+    if memory[index] == ord('&') + memory[index + 1] == ord('&'): return op_logical_and
+    if memory[index] == ord('|') + memory[index + 1] == ord('|'): return op_logical_or
+    if memory[index] == ord('+') + memory[index + 1] == ord('+'): return op_increment
+    if memory[index] == ord('-') + memory[index + 1] == ord('-'): return op_decrement
+    return -1
+
+def getOperator(index: int) -> int:
+    pass
+
+def isValidIdentifier(index: int) -> int:
+    pass
 
 def getTypeId(index: int) -> int:
-    # ANY BUILTIN TYPE = 1
-    # variable = 2
-    # export = 10
-    # import = 11
-    # if = 12
-    # else = 13
-    # while = 14
-    # return = 15
-    # break = 16
-    # continue = 17
-    # struct = 18
-    # typedef = 19
-    # invalid_op = 29
-    # op_add = 30
-    # op_sub = 31
-    # op_mul = 32
-    # op_div = 33
-    # op_mod = 34
-    # op_and = 35
-    # op_or = 36
-    # op_xor = 37
-    # op_shl = 38
-    # op_shr = 39
-    # op_eq = 40
-    # op_neq = 41
-    # op_lt = 42
-    # op_gt = 43
-    # op_lte = 44
-    # op_gte = 45
-    # op_assign = 46
-    # op_add_assign = 47
-    # op_sub_assign = 48
-    # op_mul_assign = 49
-    # op_div_assign = 50
-    # op_mod_assign = 51
-    # op_and_assign = 52
-    # op_or_assign = 53
-    # op_xor_assign = 54
-    # op_shl_assign = 55
-    # op_shr_assign = 56
     keyword = isKeyword(index)
     if keyword != -1:
         return keyword
-    return isType(index)
-
-def canFirstOperatorBeDouble(index: int) -> int:
-    pass
-
-def canSecondOperatorBeDouble(index: int) -> int:
-    pass
+    op = getOperator(index) != -1
+    if op != -1:
+        return op
+    ty = isType(index)
+    if ty != -1:
+        return ty
+    if isValidIdentifier(index):
+        return other_identifier
+    return -1
 
 def lex():
     index = 0
     while index < stack_length:
         start = index
         length = getEndOfWord(index) - index
+
+        if memory[index] == ord('"'):
+            length = getEndOfCapture(index, ord('"')) - index
+        if memory[index] == ord('\''):
+            length = getEndOfCapture(index, ord('\'')) - index
+            if length != 2:
+                pass
+                # error invalid character literal
+
         if length < 0:
             runtime_error(s_lexer_stack_limit)
         if isComment(start):
             index = skipLine(index)
             continue
 
-        if isOperator(start) and canFirstOperatorBeDouble(start) and canSecondOperatorBeDouble(start + 1):
+        if isOperator(start) and getDoubleOperator(start) != -1:
             length += 1
             index += 1
 
         type_id = getTypeId(start)
         
         if type_id == -1:
-            pass # error?
+            pass # error invalid token
         
         write_token(type_id, length, start)
 
